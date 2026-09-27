@@ -84,7 +84,7 @@ class VideoProcessingPipeline(
             JsonUtils.fromJson<SourceAnalysis>(project.sourceAnalysisJson)
         } else null
 
-        // 1. SOURCE ANALYSIS
+        // 1. SOURCE ANALYSIS (Grounds in actual video genre, setting, and dialogue)
         if (sourceAnalysis == null) {
             val stageMsg = if (!project.sourceYoutubeUrl.isNullOrBlank()) {
                 "Gemini analyzing YouTube source video & extracting narrative context..."
@@ -117,7 +117,7 @@ class VideoProcessingPipeline(
                         )
                     )
                     recordStep(projectId, PipelineStatus.SOURCE_ANALYSIS, StepStatus.COMPLETED, "Source analysis completed")
-                    logger.log(projectId, PipelineStatus.SOURCE_ANALYSIS, "Source analysis completed: ${sourceAnalysis.summary.take(80)}...", LogSeverity.SUCCESS)
+                    logger.log(projectId, PipelineStatus.SOURCE_ANALYSIS, "Source analysis completed [Genre: ${sourceAnalysis.category}]: ${sourceAnalysis.summary.take(80)}...", LogSeverity.SUCCESS)
                 }
                 is AppResult.Error -> {
                     val errorMsg = analysisResult.error.message
@@ -190,7 +190,6 @@ class VideoProcessingPipeline(
         }
 
         // ENFORCE TRANSFORMATION: An uncut video violates copyright transformation rules.
-        // If Gemini returns empty cuts, autonomously create a pacing hook trim (remove dead air at start/end).
         if (!trimDecision.isNecessary || trimDecision.segmentsToRemove.isEmpty()) {
             logger.log(projectId, PipelineStatus.TRIM_ANALYSIS, "Autonomous pacing cut injected to ensure transformative derivative edit.", LogSeverity.INFO)
             val leadInCut = if (currentDuration > 5.0) 0.8 else 0.4
@@ -221,7 +220,7 @@ class VideoProcessingPipeline(
             outputFile = trimOutputFile,
             startMs = startTrimMs,
             endMs = endTrimMs,
-            stripAudio = false // Audio will be stripped in final export
+            stripAudio = false // Audio stripped in final export
         )
 
         if (trimExecResult is AppResult.Success) {
@@ -293,7 +292,7 @@ class VideoProcessingPipeline(
             recordStep(projectId, PipelineStatus.CROP_ANALYSIS, StepStatus.SKIPPED, "Crop not required")
         }
 
-        // 6. ZOOM PIPELINE
+        // 6. ZOOM PIPELINE (Noticeable 1.28x punch-in for visual dynamics)
         onStageChanged(PipelineStatus.ZOOM_ANALYSIS, "Gemini evaluating dynamic zoom punch-in")
         recordStep(projectId, PipelineStatus.ZOOM_ANALYSIS, StepStatus.IN_PROGRESS, "Evaluating zoom")
         val zoomPrompt = Prompts.buildZoomDecisionPrompt(sourceAnalysis, currentDuration)
@@ -304,13 +303,27 @@ class VideoProcessingPipeline(
             prompt = zoomPrompt
         ) { json -> JsonUtils.fromJson<ZoomDecision>(json) }
 
-        val zoomDecision = when (zoomResult) {
+        var zoomDecision = when (zoomResult) {
             is AppResult.Success -> zoomResult.data
             is AppResult.Error -> ZoomDecision(isNecessary = false)
         }
 
+        // Ensure zoom is visually noticeable (at least 1.25x scale)
+        if (!zoomDecision.isNecessary || zoomDecision.toScale < 1.20f) {
+            zoomDecision = ZoomDecision(
+                isNecessary = true,
+                start = 0.0,
+                end = currentDuration,
+                fromScale = 1.0f,
+                toScale = 1.28f,
+                centerX = 0.5f,
+                centerY = 0.5f,
+                explanation = "Noticeable punch-in zoom applied for dynamic highlight impact."
+            )
+        }
+
         if (zoomDecision.isNecessary && AiResponseValidator.validateZoom(zoomDecision, currentDuration).isValid) {
-            onStageChanged(PipelineStatus.ZOOM_EXECUTION, "Android Media3 applying zoom punch-in")
+            onStageChanged(PipelineStatus.ZOOM_EXECUTION, "Android Media3 applying zoom punch-in (${zoomDecision.toScale}x)")
             recordStep(projectId, PipelineStatus.ZOOM_EXECUTION, StepStatus.IN_PROGRESS, "Executing zoom")
             val zoomOutputFile = storageManager.createStageOutputFile(projectId, PipelineStatus.ZOOM_EXECUTION)
             val zoomExec = transformerEngine.zoomVideo(
@@ -322,7 +335,7 @@ class VideoProcessingPipeline(
             if (zoomExec is AppResult.Success) {
                 currentVideoUri = Uri.fromFile(zoomOutputFile).toString()
                 projectRepository.updateCurrentVideoUri(projectId, currentVideoUri)
-                recordStep(projectId, PipelineStatus.ZOOM_EXECUTION, StepStatus.COMPLETED, "Zoom executed")
+                recordStep(projectId, PipelineStatus.ZOOM_EXECUTION, StepStatus.COMPLETED, "Zoom executed (${zoomDecision.toScale}x)")
                 val qa = runQaCheck(projectId, PipelineStatus.ZOOM_QA, Prompts.buildZoomQaPrompt("Scale to ${zoomDecision.toScale}"), directorModel)
                 projectRepository.recordQaResult(qa)
             }
@@ -377,9 +390,9 @@ class VideoProcessingPipeline(
         val captionQa = runQaCheck(projectId, PipelineStatus.CAPTION_QA, Prompts.buildCaptionQaPrompt(captionsToSave.size), directorModel)
         projectRepository.recordQaResult(captionQa)
 
-        // 8. COMMENTARY & LIVE WEBSOCKET AUDIO GENERATION (Solves HTTP 429 Quota Exhaustion)
-        onStageChanged(PipelineStatus.COMMENTARY_ANALYSIS, "Gemini composing hype voiceover commentary script")
-        logger.log(projectId, PipelineStatus.COMMENTARY_ANALYSIS, "Composing commentary script with emotional cues")
+        // 8. COMMENTARY & LIVE WEBSOCKET AUDIO GENERATION (Genre-conditioned screaming/shouting/moaning)
+        onStageChanged(PipelineStatus.COMMENTARY_ANALYSIS, "Gemini composing ${sourceAnalysis.category} voiceover commentary script")
+        logger.log(projectId, PipelineStatus.COMMENTARY_ANALYSIS, "Composing commentary script with emotional cues grounded in ${sourceAnalysis.category}")
         recordStep(projectId, PipelineStatus.COMMENTARY_ANALYSIS, StepStatus.IN_PROGRESS, "Composing commentary")
 
         val commentaryModel = modelRepository.getSelectedModelForPurpose(ModelPurpose.COMMENTARY)
@@ -403,17 +416,30 @@ class VideoProcessingPipeline(
             logger.log(projectId, PipelineStatus.TTS_GENERATION, "Connecting to Gemini Live WebSocket audio session...")
             recordStep(projectId, PipelineStatus.TTS_GENERATION, StepStatus.IN_PROGRESS, "Synthesizing Live Voiceover")
 
-            // Consolidate full script with emotional bracket tags to send in ONE unified Live session
             val unifiedScript = commDecision.commentarySegments.joinToString(" ") { it.text }
-            val livePersonaPrompt = "You are a high-energy viral sports and meme commentator. " +
-                "The original copyrighted audio of this clip has been 100% stripped. " +
-                "You must deliver this voiceover with extreme hype, screaming, shouting, laughing, and energetic commentary. " +
-                "Act and voice all emotion cues naturally without introductory greetings or meta-speech."
+
+            // Dynamic Live Persona Prompt strictly conditioned on detected category
+            val livePersonaPrompt = when {
+                sourceAnalysis.category.contains("SPORT", ignoreCase = true) -> {
+                    "You are an electrifying, loud, unhinged live sports commentator! " +
+                    "The original copyrighted audio is 100% stripped. " +
+                    "You MUST scream, shout, moan in disbelief, and deliver explosive hype for highlights! " +
+                    "Vocalize all cues like [SCREAMING], [LOUD SHOUT], [MOANING IN DISBELIEF], [LOUD ROAR] at maximum vocal energy without meta-speech."
+                }
+                sourceAnalysis.category.contains("NEWS", ignoreCase = true) || sourceAnalysis.category.contains("DOC", ignoreCase = true) -> {
+                    "You are an authoritative, dramatic investigative news and documentary commentator. " +
+                    "The original audio is stripped. Deliver serious narrative pacing with intense vocal gravity and dramatic pauses."
+                }
+                else -> {
+                    "You are a high-energy viral commentator. " +
+                    "The original audio is 100% stripped. Deliver energetic, expressive voiceover acting all emotion cues naturally without greetings."
+                }
+            }
 
             val livePcmFile = storageManager.createAudioOutputFile(projectId, "commentary_live_raw.pcm")
             val liveM4aFile = storageManager.createAudioOutputFile(projectId, "commentary_live.m4a")
 
-            // 1. Generate Raw PCM stream via Headless HTML Live WebSocket Engine (Unlimited RPM/RPD)
+            // 1. Generate Raw PCM stream via Headless HTML Live WebSocket Engine
             val liveResult = liveCommentatorManager.generateLiveCommentary(
                 scriptText = unifiedScript,
                 personaPrompt = livePersonaPrompt,
