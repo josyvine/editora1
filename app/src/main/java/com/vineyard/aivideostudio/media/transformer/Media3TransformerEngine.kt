@@ -301,16 +301,22 @@ class Media3TransformerEngine(private val context: Context) {
                 textPaint.textSize = scaledFontSize
                 strokePaint.textSize = scaledFontSize
 
-                try {
-                    textPaint.color = Color.parseColor(activeCaption.fontColorHex)
-                } catch (_: Exception) {
+                val fontHex = activeCaption.fontColorHex
+                if (!fontHex.isNullOrBlank()) {
+                    try {
+                        textPaint.color = Color.parseColor(fontHex)
+                    } catch (_: Exception) {
+                        textPaint.color = Color.WHITE
+                    }
+                } else {
                     textPaint.color = Color.WHITE
                 }
 
-                // Render background highlight box if configured
-                if (activeCaption.backgroundColorHex.isNotBlank() && activeCaption.backgroundColorHex != "#00000000") {
+                // Render background highlight box if configured (null-safe smart cast)
+                val bgHex = activeCaption.backgroundColorHex
+                if (!bgHex.isNullOrBlank() && bgHex != "#00000000") {
                     try {
-                        backgroundPillPaint.color = Color.parseColor(activeCaption.backgroundColorHex)
+                        backgroundPillPaint.color = Color.parseColor(bgHex)
                         val textWidth = textPaint.measureText(activeCaption.text)
                         val padH = 28f
                         val padV = 16f
