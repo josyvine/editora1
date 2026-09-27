@@ -4,6 +4,7 @@ import android.media.MediaCodec
 import android.media.MediaCodecInfo
 import android.media.MediaFormat
 import android.media.MediaMuxer
+import android.util.Log
 import com.vineyard.aivideostudio.core.common.DispatcherProvider
 import com.vineyard.aivideostudio.core.result.AppError
 import com.vineyard.aivideostudio.core.result.AppResult
@@ -22,6 +23,7 @@ class PcmToM4aConverter(
 ) {
 
     companion object {
+        private const val TAG = "PcmToM4aConverter"
         private const val TIMEOUT_US = 10_000L
         private const val BUFFER_SIZE = 16_384
         private const val DEFAULT_SAMPLE_RATE = 24_000 // Standard Gemini Live Bidi output rate
@@ -47,8 +49,8 @@ class PcmToM4aConverter(
     ): AppResult<File> = withContext(dispatcherProvider.io) {
         if (!pcmFile.exists() || pcmFile.length() == 0L) {
             val err = "Cannot convert PCM to M4A: Source file is missing or empty."
-            logger.e("PcmToM4aConverter", err)
-            return@withContext AppResult.Error(AppError.AudioProcessingError(err))
+            Log.e(TAG, err)
+            return@withContext AppResult.Error(AppError.MediaProcessingError(err))
         }
 
         outputM4aFile.parentFile?.mkdirs()
@@ -61,7 +63,7 @@ class PcmToM4aConverter(
         var inputStream: FileInputStream? = null
 
         try {
-            logger.i("PcmToM4aConverter", "Starting PCM to M4A conversion (Size: ${pcmFile.length()} bytes, Rate: ${sampleRate}Hz)...")
+            Log.i(TAG, "Starting PCM to M4A conversion (Size: ${pcmFile.length()} bytes, Rate: ${sampleRate}Hz)...")
 
             // 1. Configure AAC Audio Format
             val audioFormat = MediaFormat.createAudioFormat(
@@ -141,13 +143,13 @@ class PcmToM4aConverter(
                     }
                     outputBufferIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
                         if (isMuxerStarted) {
-                            logger.w("PcmToM4aConverter", "Output format changed more than once!")
+                            Log.w(TAG, "Output format changed more than once!")
                         } else {
                             val newFormat = codec.outputFormat
                             audioTrackIndex = muxer.addTrack(newFormat)
                             muxer.start()
                             isMuxerStarted = true
-                            logger.d("PcmToM4aConverter", "MediaMuxer started with track index: $audioTrackIndex")
+                            Log.d(TAG, "MediaMuxer started with track index: $audioTrackIndex")
                         }
                     }
                     outputBufferIndex >= 0 -> {
@@ -166,37 +168,31 @@ class PcmToM4aConverter(
                         codec.releaseOutputBuffer(outputBufferIndex, false)
 
                         if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
-                            logger.i("PcmToM4aConverter", "End of stream flag reached on encoder output.")
+                            Log.i(TAG, "End of stream flag reached on encoder output.")
                             break
                         }
                     }
                 }
             }
 
-            logger.i("PcmToM4aConverter", "PCM to M4A conversion successful! Output file: ${outputM4aFile.absolutePath} (Size: ${outputM4aFile.length()} bytes)")
+            Log.i(TAG, "PCM to M4A conversion successful! Output file: ${outputM4aFile.absolutePath} (Size: ${outputM4aFile.length()} bytes)")
             AppResult.Success(outputM4aFile)
 
         } catch (e: Exception) {
-            logger.e("PcmToM4aConverter", "Exception during PCM to M4A encoding: ${e.message}", e)
-            AppResult.Error(AppError.AudioProcessingError("Failed encoding PCM to M4A: ${e.message}"))
+            Log.e(TAG, "Exception during PCM to M4A encoding: ${e.message}", e)
+            AppResult.Error(AppError.MediaProcessingError("Failed encoding PCM to M4A: ${e.message}", e))
         } finally {
             try {
                 inputStream?.close()
-            } catch (e: Exception) {
-                // ignore
-            }
+            } catch (_: Exception) {}
             try {
                 codec?.stop()
                 codec?.release()
-            } catch (e: Exception) {
-                // ignore
-            }
+            } catch (_: Exception) {}
             try {
                 muxer?.stop()
                 muxer?.release()
-            } catch (e: Exception) {
-                // ignore
-            }
+            } catch (_: Exception) {}
         }
     }
 }
