@@ -16,15 +16,16 @@ object Prompts {
         - FPS: ${metadata.frameRate}
         
         TASK:
-        Perform deep semantic source analysis. Accurately identify the main subject, setting, dialogue, and comedic/dramatic punchlines.
-        CRUCIAL: Ground your analysis strictly in the actual content (e.g. sports interview, meme, basketball press conference). Do NOT hallucinate unrelated prank or drinking actions if they are not in the video.
+        Perform deep semantic source analysis. Accurately identify the video genre/category (SPORTS, NEWS, COMEDY, GAMING, DOCUMENTARY, ENTERTAINMENT), the main subjects, setting, actual dialogue, and highlight moments.
+        CRUCIAL MANDATE: Ground your analysis strictly in what is actually in the video (e.g. if it is Luka Doncic playing basketball or an NBA press conference, analyze it as professional basketball; if it is news, analyze it as news). DO NOT hallucinate unrelated gym or prank activities.
         
         OUTPUT FORMAT (STRICT JSON ONLY):
         {
           "duration": ${metadata.durationSeconds},
           "resolution": "${metadata.width}x${metadata.height}",
           "orientation": "${if (metadata.isPortrait) "PORTRAIT" else "LANDSCAPE"}",
-          "summary": "Accurate, grounded summary of the actual subject, topic, and comedic/hype hook",
+          "category": "SPORTS / NEWS / COMEDY / GAMING / DOCUMENTARY / ENTERTAINMENT",
+          "summary": "Accurate, grounded summary of the actual subject, topic, and key action",
           "scenes": [
             {
               "start": 0.0,
@@ -42,7 +43,7 @@ object Prompts {
               "text": "Spoken dialogue"
             }
           ],
-          "criticalContent": ["Key comedic punchline or highlight moment that must be emphasized"],
+          "criticalContent": ["Key highlight play, quote, or climax that must be emphasized"],
           "editingCandidates": [
             {
               "start": 0.0,
@@ -51,7 +52,7 @@ object Prompts {
               "reason": "Eliminate dead-air intro to speed up pacing and create a transformative derivative edit"
             }
           ],
-          "suggestedEditingStrategy": "High-retention pacing cut with energetic voiceover commentary"
+          "suggestedEditingStrategy": "High-retention pacing cut with dynamic voiceover commentary tailored to genre"
         }
     """.trimIndent()
 
@@ -68,6 +69,7 @@ object Prompts {
         
         CURRENT TIMELINE:
         - Video Duration: $currentDuration seconds
+        - Category: ${sourceAnalysis.category}
         - Subject / Summary: ${sourceAnalysis.summary}
         - Critical Highlight: ${sourceAnalysis.criticalContent.joinToString()}
         
@@ -85,7 +87,7 @@ object Prompts {
             {
               "start": 0.0,
               "end": 0.8,
-              "reason": "Cut lead-in pause to instantly jump into the punchline and ensure transformative derivative editing"
+              "reason": "Cut lead-in pause to jump straight into action and establish a transformative cut"
             }
           ],
           "explanation": "Tightening intro dead air to boost viewer retention and establish a transformative cut"
@@ -172,15 +174,16 @@ object Prompts {
         sourceAnalysis: SourceAnalysis,
         currentDuration: Double
     ): String = """
-        You are a video editing director deciding on a dynamic punch-in zoom for comedic or dramatic emphasis.
+        You are a video editing director deciding on a dynamic punch-in zoom for visual impact.
         
         CURRENT TIMELINE:
         - Duration: $currentDuration seconds
+        - Category: ${sourceAnalysis.category}
         - Context: ${sourceAnalysis.summary}
         - Key Moment: ${sourceAnalysis.criticalContent.joinToString()}
         
         RULE:
-        Apply a punch-in zoom scale (e.g., 1.15x to 1.25x) timed to the climax or reaction to heighten visual impact.
+        Apply a clearly noticeable punch-in zoom scale (strictly between 1.25x and 1.35x) timed to the climax or key reaction to produce an obvious, cinematic visual change.
         
         OUTPUT FORMAT (STRICT JSON ONLY):
         {
@@ -189,22 +192,22 @@ object Prompts {
           "start": 0.0,
           "end": $currentDuration,
           "fromScale": 1.0,
-          "toScale": 1.18,
+          "toScale": 1.28,
           "centerX": 0.5,
           "centerY": 0.5,
-          "explanation": "Dynamic punch-in to emphasize speaker expression and comedic reaction"
+          "explanation": "Noticeable punch-in zoom on climax to heighten visual engagement"
         }
     """.trimIndent()
 
     fun buildZoomQaPrompt(zoomDetails: String): String = """
         Inspect the ZOOM operation: $zoomDetails.
-        Check that zoom scale provides visual emphasis while preserving video quality.
+        Check that zoom scale provides obvious visual impact while preserving framing.
         
         OUTPUT FORMAT (STRICT JSON ONLY):
         {
           "verdict": "PASS",
           "confidence": 0.95,
-          "feedback": "Zoom punch-in successfully enhances visual engagement.",
+          "feedback": "Punch-in zoom provides distinct visual energy.",
           "corrections": [],
           "criticalContentPreserved": true
         }
@@ -216,9 +219,10 @@ object Prompts {
     ): String = """
         You are an elite subtitle director creating high-retention burned-in captions for this video.
         
-        TIMELINE:
+        TIMELINE & CONTEXT:
         - Duration: $currentDuration seconds
-        - Spoken Dialogue / Context: ${sourceAnalysis.dialogueSegments.joinToString { "[${it.start}-${it.end}] ${it.text}" }}
+        - Category: ${sourceAnalysis.category}
+        - Spoken Dialogue / Highlights: ${sourceAnalysis.dialogueSegments.joinToString { "[${it.start}-${it.end}] ${it.text}" }}
         
         RULES:
         1. Generate short, punchy, high-impact captions formatted for short-form retention (1 to 4 words per segment).
@@ -262,40 +266,54 @@ object Prompts {
         sourceAnalysis: SourceAnalysis,
         currentDuration: Double
     ): String = """
-        You are a world-class, high-octane viral sports and meme voiceover commentator.
+        You are an elite, highly dynamic AI voiceover commentator.
         
         CRUCIAL MANDATE:
         The original copyrighted audio of this video is COMPLETELY STRIPPED AND PURGED.
-        Your voiceover commentary will be the ONLY audio track on the final video.
+        Your voiceover commentary will be the ONLY audio soundtrack on the final video.
         
         VIDEO CONTEXT:
-        - Duration: $currentDuration seconds
-        - Actual Subject & Scene: ${sourceAnalysis.summary}
-        - Key Action / Punchline: ${sourceAnalysis.criticalContent.joinToString()}
+        - Category / Genre: ${sourceAnalysis.category}
+        - Current Edited Duration: $currentDuration seconds
+        - True Subject & Scene: ${sourceAnalysis.summary}
+        - Key Action / Climax: ${sourceAnalysis.criticalContent.joinToString()}
+        - Spoken Transcript Context: ${sourceAnalysis.dialogueSegments.joinToString { it.text }}
         
-        EXPRESSIVE VOCAL ACTING INSTRUCTIONS:
-        This script will be performed by an expressive neural voice actor capable of screaming, laughing, and shouting.
-        You MUST include emotional vocal acting cues in square brackets throughout the text, such as:
-        [SCREAMING], [LOUD HYPE], [SHOCKED GASP], [DISBELIEF], [LAUGHING], [FAST-PACED].
+        DYNAMIC VOCAL ACTING & GENRE DIRECTIVES:
+        Your script will be voiced by an expressive Gemini Multimodal Live neural voice that can scream, moan, shout, laugh, and whisper in real time.
+        You MUST tailor your vocal acting strictly to the detected Category:
         
-        RULES:
-        1. Ground your commentary strictly in what is happening (e.g. basketball, press conference meme, hilarious reaction). Do NOT hallucinate drinking/prank actions that do not exist.
+        1. IF SPORTS (NBA, Football, Basketball, Soccer, Wrestling, Racing):
+           - Deliver an electrifying, loud, hype sports play-by-play commentary!
+           - You MUST include intense vocal acting cues: [SCREAMING], [LOUD SHOUT], [MOANING IN DISBELIEF], [LOUD ROAR], [EXPLOSIVE EXCITEMENT], [FAST-PACED].
+           - Shouting and screaming at unbelievable highlights is MANDATORY! E.g. "[MOANING IN DISBELIEF]: OHHH NO HE DID NOT! [SCREAMING]: HE DROPPED A DIME THROUGH THREE DEFENDERS! UNBELIEVABLE!"
+        
+        2. IF NEWS / INTERVIEW / CRIME / DOCUMENTARY:
+           - Deliver an authoritative, intense, dramatic investigative commentary.
+           - Use emotional cues like: [DRAMATIC PAUSE], [SERIOUS], [URGENT], [INTENSE WHISPER], [STERN].
+        
+        3. IF COMEDY / MEME / REACTION:
+           - Deliver hilarious, sarcastic, energetic reaction commentary.
+           - Use emotional cues like: [LAUGHING], [WHEEZING], [SHOCKED GASP], [CONFUSION].
+        
+        STRICT RULES:
+        1. Ground your script STRICTLY in the actual subject (${sourceAnalysis.summary}). If it is basketball, talk about the basketball play. If it is news, talk about the news. DO NOT hallucinate unrelated workout or drinking topics.
         2. Keep the entire voiceover script timed to finish naturally within $currentDuration seconds.
-        3. Start speaking the hype commentary immediately without introductory greetings like "Hello folks".
+        3. Start speaking the commentary immediately without introductory greetings like "Hello viewers".
         
         OUTPUT FORMAT (STRICT JSON ONLY):
         {
           "operation": "commentary",
           "isNecessary": true,
-          "tone": "hyper-energetic, hyped, screaming meme commentator",
+          "tone": "genre-adapted dynamic commentary with intense vocal cues",
           "commentarySegments": [
             {
               "start": 0.0,
               "end": $currentDuration,
-              "text": "[LOUD HYPE]: OHHH MY GOODNESS! Look at the confidence right here! [LAUGHING]: He literally said he feels like the meme itself! [SCREAMING]: UNBELIEVABLE!"
+              "text": "[LOUD SHOUT]: OHHH MY GOODNESS! Look at that court vision! [MOANING IN DISBELIEF]: How does he even see that lane?! [SCREAMING]: SLAMS IT DOWN! UNREAL!"
             }
           ],
-          "explanation": "High-octane viral commentary with emotional acting cues replacing copyrighted original audio"
+          "explanation": "Dynamic genre-tailored voiceover commentary replacing purged original audio"
         }
     """.trimIndent()
 
