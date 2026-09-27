@@ -9,8 +9,8 @@ import com.vineyard.aivideostudio.ai.model.CommentaryDecision
 import com.vineyard.aivideostudio.ai.model.CropDecision
 import com.vineyard.aivideostudio.ai.model.ModelPurpose
 import com.vineyard.aivideostudio.ai.model.SourceAnalysis
-import com.vineyard.aivideostudio.ai.model.TimeRange
 import com.vineyard.aivideostudio.ai.model.TrimDecision
+import com.vineyard.aivideostudio.ai.model.TrimSegment
 import com.vineyard.aivideostudio.ai.model.ZoomDecision
 import com.vineyard.aivideostudio.ai.prompt.Prompts
 import com.vineyard.aivideostudio.ai.validator.AiResponseValidator
@@ -25,7 +25,6 @@ import com.vineyard.aivideostudio.core.model.QaResult
 import com.vineyard.aivideostudio.core.model.QaVerdict
 import com.vineyard.aivideostudio.core.model.StepStatus
 import com.vineyard.aivideostudio.core.model.TimelineMap
-import com.vineyard.aivideostudio.core.model.TimelineSegment
 import com.vineyard.aivideostudio.core.model.TranscriptSegment
 import com.vineyard.aivideostudio.core.result.AppError
 import com.vineyard.aivideostudio.core.result.AppResult
@@ -197,7 +196,13 @@ class VideoProcessingPipeline(
             val leadInCut = if (currentDuration > 5.0) 0.8 else 0.4
             trimDecision = TrimDecision(
                 isNecessary = true,
-                segmentsToRemove = listOf(TimeRange(start = 0.0, end = leadInCut)),
+                segmentsToRemove = listOf(
+                    TrimSegment(
+                        start = 0.0,
+                        end = leadInCut,
+                        reason = "Autonomous lead-in trimming to tighten pacing and ensure derivative editing."
+                    )
+                ),
                 explanation = "Autonomous lead-in trimming to tighten pacing and ensure derivative editing."
             )
         }
@@ -225,20 +230,6 @@ class VideoProcessingPipeline(
             currentDuration = timelineMap.currentDuration
             projectRepository.saveTimelineMap(projectId, timelineMap)
             projectRepository.updateCurrentVideoUri(projectId, currentVideoUri)
-
-            // Persist populated timeline segments so Editor screen displays active cut markers
-            val dbSegments = timelineMap.segments.mapIndexed { idx, seg ->
-                TimelineSegment(
-                    id = "tl_seg_${idx}_${System.currentTimeMillis()}",
-                    projectId = projectId,
-                    sourceStart = seg.sourceStart,
-                    sourceEnd = seg.sourceEnd,
-                    outputStart = seg.outputStart,
-                    outputEnd = seg.outputEnd,
-                    isKept = seg.isKept
-                )
-            }
-            projectRepository.saveTimelineSegments(projectId, dbSegments)
 
             recordStep(projectId, PipelineStatus.TRIM_EXECUTION, StepStatus.COMPLETED, "Trim cuts applied successfully")
             logger.log(projectId, PipelineStatus.TRIM_EXECUTION, "Trim executed: New duration ${String.format("%.2f", currentDuration)}s", LogSeverity.SUCCESS)
@@ -366,17 +357,17 @@ class VideoProcessingPipeline(
 
         val captionsToSave = captionDecision.captions.mapIndexed { idx, cap ->
             Caption(
-                id = idx.toLong() + 1L,
+                id = "cap_${idx}_${System.currentTimeMillis()}",
                 projectId = projectId,
                 text = cap.text,
-                startMs = (cap.start * 1000L).toLong(),
-                endMs = (cap.end * 1000L).toLong(),
-                positionX = cap.x,
-                positionY = cap.y,
-                fontSize = 24f,
-                fontColor = cap.colorHex,
-                backgroundColor = "#80000000",
-                animation = cap.style
+                start = cap.start,
+                end = cap.end,
+                x = cap.x,
+                y = cap.y,
+                fontSizeSp = 22f,
+                fontColorHex = cap.colorHex,
+                backgroundColorHex = "#80000000",
+                style = cap.style
             )
         }
         projectRepository.saveCaptions(projectId, captionsToSave)
