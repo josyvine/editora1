@@ -1,5 +1,7 @@
 package com.vineyard.aivideostudio.ui.screens.editor
 
+import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.vineyard.aivideostudio.core.model.Caption
@@ -10,12 +12,18 @@ import com.vineyard.aivideostudio.core.model.Project
 import com.vineyard.aivideostudio.core.model.QaResult
 import com.vineyard.aivideostudio.core.model.TimelineSegment
 import com.vineyard.aivideostudio.core.model.TranscriptSegment
+import com.vineyard.aivideostudio.core.result.AppResult
+import com.vineyard.aivideostudio.core.util.StorageUtils
 import com.vineyard.aivideostudio.project.repository.ProjectRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 
 data class EditorUiState(
     val project: Project? = null,
@@ -29,7 +37,11 @@ data class EditorUiState(
     val activeCommentaryAudioUri: String? = null,
     val isOriginalAudioMuted: Boolean = true,
     val totalTimeTrimmedSeconds: Double = 0.0,
-    val isCopyrightTransformed: Boolean = true
+    val isCopyrightTransformed: Boolean = true,
+    val isExporting: Boolean = false,
+    val exportSuccessMessage: String? = null,
+    val exportErrorMessage: String? = null,
+    val savedPublicUri: String? = null
 )
 
 class EditorViewModel(
@@ -38,6 +50,10 @@ class EditorViewModel(
 ) : ViewModel() {
 
     private val _isOriginalAudioMuted = MutableStateFlow(true)
+    private val _isExporting = MutableStateFlow(false)
+    private val _exportSuccessMessage = MutableStateFlow<String?>(null)
+    private val _exportErrorMessage = MutableStateFlow<String?>(null)
+    private val _savedPublicUri = MutableStateFlow<String?>(null)
 
     val uiState: StateFlow<EditorUiState> = combine(
         projectRepository.getProjectByIdFlow(projectId),
@@ -48,7 +64,10 @@ class EditorViewModel(
         projectRepository.getSteps(projectId),
         projectRepository.getArtifacts(projectId),
         projectRepository.getQaResults(projectId),
-        _isOriginalAudioMuted
+        _isOriginalAudioMuted,
+        _isExporting,
+        _exportSuccessMessage,
+        _exportErrorMessage
     ) { args: Array<Any?> ->
         @Suppress("UNCHECKED_CAST")
         val project = args[0] as? Project
@@ -67,6 +86,9 @@ class EditorViewModel(
         @Suppress("UNCHECKED_CAST")
         val qaResults = (args[7] as? List<QaResult>) ?: emptyList()
         val isMuted = (args[8] as? Boolean) ?: true
+        val isExporting = (args[9] as? Boolean) ?: false
+        val exportSuccess = args[10] as? String
+        val exportError = args[11] as? String
 
         // Extract synchronized commentary track
         val activeAudioUri = commentary.firstOrNull { !it.audioArtifactUri.isNullOrBlank() }?.audioArtifactUri
@@ -89,7 +111,11 @@ class EditorViewModel(
             activeCommentaryAudioUri = activeAudioUri,
             isOriginalAudioMuted = isMuted,
             totalTimeTrimmedSeconds = totalTrimmed,
-            isCopyrightTransformed = true
+            isCopyrightTransformed = true,
+            isExporting = isExporting,
+            exportSuccessMessage = exportSuccess,
+            exportErrorMessage = exportError,
+            savedPublicUri = _savedPublicUri.value
         )
     }.stateIn(
         scope = viewModelScope,
@@ -97,10 +123,139 @@ class EditorViewModel(
         initialValue = EditorUiState()
     )
 
-    /**
-     * Toggles whether the source audio is muted during editor preview inspection.
-     */
     fun toggleOriginalAudioMute() {
         _isOriginalAudioMuted.value = !_isOriginalAudioMuted.value
+    }
+
+    private fun resolveCurrentVideoFile(state: EditorUiState): File? {
+        val uriStr = state.project?.currentVideoUri ?: return null
+        val file = if (uriStr.startsWith("file://")) {
+            File(Uri.parse(uriStr).path ?: "")
+        } else {
+            File(uriStr)
+        }
+        if (file.exists() && file.length() > 0L) return file
+
+        val artifact = state.artifacts.firstOrNull { it.filePath.isNotBlank() && File(it.filePath).exists() }
+        return artifact?.let { File(it.filePath) }
+    }
+
+    /**
+     * Saves the final transformed video directly to the device's public Gallery (Movies/Editora).
+     */
+    fun exportToGallery(context: Context) {
+        val state = uiState.value
+        val file = resolveCurrentVideoFile(state)
+        if (file == null || !file.exists()) {
+            _exportErrorMessage.value = "Final video file not found in storage."
+            return
+        }
+
+        viewModelScope.launch {
+            _isExporting.value = true
+            _exportErrorMessage.value = null
+            _exportSuccessMessage.value = null
+
+            val projectName = state.project?.name?.replace(Regex("[^a-zA-Z0-9._-]"), "_") ?: "Editora_Production"
+            val result = withContext(Dispatchers.IO) {
+                StorageUtils.saveVideoToGallery(
+                    context = context.applicationContext,
+                    sourceFile = file,
+                    displayName = "$projectName.mp4"
+                )
+            }
+
+            when (result) {
+                is AppResult.Success -> {
+                    _exportSuccessMessage.value = "Saved to Gallery (Movies/Editora)"
+                    _savedPublicUri.value = result.data.toString()
+                }
+                is AppResult.Error -> {
+                    _exportErrorMessage.value = "Failed saving to gallery: ${result.error.message}"
+                }
+            }
+            _isExporting.value = false
+        }
+    }
+
+    /**
+     * Saves the final video to a custom folder selected via Storage Access Framework.
+     */
+    fun exportToCustomTree(context: Context, treeUri: Uri) {
+        val state = uiState.value
+        val file = resolveCurrentVideoFile(state)
+        if (file == null || !file.exists()) {
+            _exportErrorMessage.value = "Final video file not found in storage."
+            return
+        }
+
+        viewModelScope.launch {
+            _isExporting.value = true
+            _exportErrorMessage.value = null
+            _exportSuccessMessage.value = null
+
+            val projectName = state.project?.name?.replace(Regex("[^a-zA-Z0-9._-]"), "_") ?: "Editora_Production"
+            val result = withContext(Dispatchers.IO) {
+                StorageUtils.saveVideoToTreeUri(
+                    context = context.applicationContext,
+                    sourceFile = file,
+                    treeUri = treeUri,
+                    displayName = "$projectName.mp4"
+                )
+            }
+
+            when (result) {
+                is AppResult.Success -> {
+                    _exportSuccessMessage.value = "Saved to selected folder"
+                    _savedPublicUri.value = result.data.toString()
+                }
+                is AppResult.Error -> {
+                    _exportErrorMessage.value = "Failed saving to folder: ${result.error.message}"
+                }
+            }
+            _isExporting.value = false
+        }
+    }
+
+    /**
+     * Saves the final video to a file destination chosen via system file picker.
+     */
+    fun exportToDocumentUri(context: Context, targetUri: Uri) {
+        val state = uiState.value
+        val file = resolveCurrentVideoFile(state)
+        if (file == null || !file.exists()) {
+            _exportErrorMessage.value = "Final video file not found in storage."
+            return
+        }
+
+        viewModelScope.launch {
+            _isExporting.value = true
+            _exportErrorMessage.value = null
+            _exportSuccessMessage.value = null
+
+            val result = withContext(Dispatchers.IO) {
+                StorageUtils.copyVideoToUri(
+                    context = context.applicationContext,
+                    sourceFile = file,
+                    targetUri = targetUri
+                )
+            }
+
+            when (result) {
+                is AppResult.Success -> {
+                    _exportSuccessMessage.value = "Video file saved successfully"
+                    _savedPublicUri.value = result.data.toString()
+                }
+                is AppResult.Error -> {
+                    _exportErrorMessage.value = "Failed writing video: ${result.error.message}"
+                }
+            }
+            _isExporting.value = false
+        }
+    }
+
+    fun clearExportStatus() {
+        _exportSuccessMessage.value = null
+        _exportErrorMessage.value = null
     }
 }
