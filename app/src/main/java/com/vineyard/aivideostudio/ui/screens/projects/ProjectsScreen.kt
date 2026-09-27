@@ -2,6 +2,7 @@ package com.vineyard.aivideostudio.ui.screens.projects
 
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -20,6 +21,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlayArrow
@@ -44,6 +46,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vineyard.aivideostudio.core.model.PipelineStatus
+import com.vineyard.aivideostudio.core.result.AppResult
+import com.vineyard.aivideostudio.core.util.StorageUtils
 import com.vineyard.aivideostudio.core.util.TimeUtils
 import com.vineyard.aivideostudio.ui.components.AppTopBar
 import com.vineyard.aivideostudio.ui.components.ConfirmationDialog
@@ -57,6 +61,7 @@ import com.vineyard.aivideostudio.ui.theme.TextPrimary
 import com.vineyard.aivideostudio.ui.theme.TextSecondary
 import com.vineyard.aivideostudio.ui.theme.TextTertiary
 import com.vineyard.aivideostudio.ui.theme.VioletAccent
+import java.io.File
 
 @Composable
 fun ProjectsScreen(
@@ -175,8 +180,58 @@ fun ProjectsScreen(
                                     color = TextSecondary
                                 )
 
-                                Row {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
                                     if (project.status == PipelineStatus.COMPLETED && project.finalVideoUri != null) {
+                                        // 1. One-Tap Save to Gallery Button
+                                        IconButton(
+                                            onClick = {
+                                                val finalUriStr = project.finalVideoUri ?: project.currentVideoUri
+                                                val file = if (finalUriStr.startsWith("file://")) {
+                                                    File(Uri.parse(finalUriStr).path ?: "")
+                                                } else {
+                                                    File(finalUriStr)
+                                                }
+
+                                                if (file.exists() && file.length() > 0L) {
+                                                    val cleanName = project.name.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+                                                    val result = StorageUtils.saveVideoToGallery(
+                                                        context = context,
+                                                        sourceFile = file,
+                                                        displayName = "$cleanName.mp4"
+                                                    )
+                                                    when (result) {
+                                                        is AppResult.Success -> {
+                                                            Toast.makeText(
+                                                                context,
+                                                                "Saved to Gallery (Movies/Editora)",
+                                                                Toast.LENGTH_SHORT
+                                                            ).show()
+                                                        }
+                                                        is AppResult.Error -> {
+                                                            Toast.makeText(
+                                                                context,
+                                                                "Export failed: ${result.error.message}",
+                                                                Toast.LENGTH_LONG
+                                                            ).show()
+                                                        }
+                                                    }
+                                                } else {
+                                                    Toast.makeText(
+                                                        context,
+                                                        "Video file not found in storage",
+                                                        Toast.LENGTH_SHORT
+                                                    ).show()
+                                                }
+                                            }
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Filled.Download,
+                                                contentDescription = "Save to Gallery",
+                                                tint = VioletAccent
+                                            )
+                                        }
+
+                                        // 2. Share Video Button
                                         IconButton(
                                             onClick = {
                                                 val shareIntent = Intent(Intent.ACTION_SEND).apply {
@@ -194,6 +249,7 @@ fun ProjectsScreen(
                                         }
                                     }
 
+                                    // 3. Delete Project Button
                                     IconButton(
                                         onClick = { projectToDelete = project.id }
                                     ) {
