@@ -33,6 +33,7 @@ data class SourceAnalysis(
     val duration: Double,
     val resolution: String = "1920x1080",
     val orientation: String = "LANDSCAPE",
+    val category: String = "ENTERTAINMENT", // SPORTS, NEWS, COMEDY, GAMING, DOCUMENTARY, ENTERTAINMENT
     val summary: String,
     val scenes: List<SceneSegment> = emptyList(),
     val dialogueSegments: List<DialogueSegment> = emptyList(),
@@ -45,7 +46,7 @@ data class SourceAnalysis(
 data class TrimSegment(
     val start: Double,
     val end: Double,
-    val reason: String
+    val reason: String = ""
 )
 
 @JsonClass(generateAdapter = true)
@@ -75,7 +76,7 @@ data class ZoomDecision(
     val start: Double = 0.0,
     val end: Double = 0.0,
     val fromScale: Float = 1.0f,
-    val toScale: Float = 1.0f,
+    val toScale: Float = 1.28f,
     val centerX: Float = 0.5f,
     val centerY: Float = 0.5f,
     val explanation: String = ""
@@ -112,7 +113,7 @@ data class CommentaryDecision(
     val operation: String = "commentary",
     val isNecessary: Boolean = false,
     val commentarySegments: List<CommentaryItem> = emptyList(),
-    val tone: String = "engaging",
+    val tone: String = "genre-adapted dynamic commentary with intense vocal cues",
     val explanation: String = ""
 )
 
