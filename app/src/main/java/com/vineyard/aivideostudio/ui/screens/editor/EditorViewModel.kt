@@ -73,8 +73,8 @@ class EditorViewModel(
             ?: artifacts.firstOrNull { it.stage.name.contains("TTS") || it.stage.name.contains("COMMENTARY") }?.fileUri
 
         // Calculate total trimmed duration to show transformative editing impact
-        val totalTrimmed = timeline.sumOf { seg ->
-            (seg.sourceEnd - seg.sourceStart) - (seg.outputEnd - seg.outputStart)
+        val totalTrimmed = timeline.sumOf { seg: TimelineSegment ->
+            (seg.originalEnd - seg.originalStart) - (seg.currentEnd - seg.currentStart)
         }.coerceAtLeast(0.0)
 
         EditorUiState(
