@@ -29,6 +29,8 @@ data class SettingsUiState(
     val maxQaRetries: Int = 3,
     val keepIntermediateVideos: Boolean = true,
     val autoFinalQa: Boolean = true,
+    val purgeOriginalAudio: Boolean = true,
+    val selectedVoice: String = "Puck",
     val voices: List<VoiceProfile> = emptyList(),
     val statusMessage: String? = null,
     val errorMessage: String? = null
@@ -44,12 +46,16 @@ class SettingsViewModel(
     private val _statusMessage = MutableStateFlow<String?>(null)
     private val _errorMessage = MutableStateFlow<String?>(null)
     private val _isFetching = MutableStateFlow(false)
+    private val _purgeOriginalAudio = MutableStateFlow(processingPreferences.purgeOriginalAudio)
+    private val _selectedVoice = MutableStateFlow(processingPreferences.commentaryVoice)
 
     val uiState: StateFlow<SettingsUiState> = combine(
         preferences.apiKeyFlow,
         modelRepository.cachedModels,
         modelRepository.getAllConfigurations(),
         voiceRepository.getAllVoices(),
+        _purgeOriginalAudio,
+        _selectedVoice,
         _statusMessage,
         _errorMessage,
         _isFetching
@@ -61,9 +67,11 @@ class SettingsViewModel(
         val configs = (args[2] as? List<ModelConfigurationEntity>) ?: emptyList()
         @Suppress("UNCHECKED_CAST")
         val voices = (args[3] as? List<VoiceProfile>) ?: emptyList()
-        val statusMsg = args[4] as? String
-        val errorMsg = args[5] as? String
-        val isFetching = (args[6] as? Boolean) ?: false
+        val purgeAudio = (args[4] as? Boolean) ?: true
+        val voiceName = (args[5] as? String) ?: "Puck"
+        val statusMsg = args[6] as? String
+        val errorMsg = args[7] as? String
+        val isFetching = (args[8] as? Boolean) ?: false
 
         val configMap = configs.associate { it.purpose to it.modelId }
         val masked = if (apiKey.length > 8) {
@@ -84,6 +92,8 @@ class SettingsViewModel(
             maxQaRetries = processingPreferences.maxQaRetries,
             keepIntermediateVideos = processingPreferences.keepIntermediateVideos,
             autoFinalQa = processingPreferences.autoFinalQa,
+            purgeOriginalAudio = purgeAudio,
+            selectedVoice = voiceName,
             voices = voices,
             statusMessage = statusMsg,
             errorMessage = errorMsg
@@ -96,19 +106,19 @@ class SettingsViewModel(
 
     fun onApiKeyChanged(newKey: String) {
         preferences.setApiKey(newKey)
-        _statusMessage.value = "API Key saved"
+        _statusMessage.value = "Gemini API Key saved securely"
         _errorMessage.value = null
     }
 
     fun fetchModels() {
         viewModelScope.launch {
             _isFetching.value = true
-            _statusMessage.value = "Fetching Gemini models dynamically..."
+            _statusMessage.value = "Syncing Gemini models dynamically from Google AI..."
             _errorMessage.value = null
 
             when (val result = modelRepository.fetchAvailableModels()) {
                 is AppResult.Success -> {
-                    _statusMessage.value = "Fetched and classified ${result.data.size} models!"
+                    _statusMessage.value = "Successfully cataloged ${result.data.size} models (Live & REST)!"
                 }
                 is AppResult.Error -> {
                     _errorMessage.value = result.error.message
@@ -124,6 +134,22 @@ class SettingsViewModel(
             modelRepository.setSelectedModelForPurpose(purpose, model)
             _statusMessage.value = "Assigned ${model.displayName} to ${purpose.displayName}"
         }
+    }
+
+    fun onPurgeOriginalAudioChanged(purge: Boolean) {
+        processingPreferences.purgeOriginalAudio = purge
+        _purgeOriginalAudio.value = purge
+        _statusMessage.value = if (purge) {
+            "Copyright Protection: Original audio will be purged"
+        } else {
+            "Warning: Original audio retention enabled"
+        }
+    }
+
+    fun setCommentaryVoice(voiceName: String) {
+        processingPreferences.commentaryVoice = voiceName
+        _selectedVoice.value = voiceName
+        _statusMessage.value = "Commentary voice set to '$voiceName'"
     }
 
     fun onKeepIntermediateVideosChanged(keep: Boolean) {
