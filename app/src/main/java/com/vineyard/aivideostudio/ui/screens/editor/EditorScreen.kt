@@ -14,11 +14,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -38,17 +41,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vineyard.aivideostudio.core.util.TimeUtils
 import com.vineyard.aivideostudio.ui.components.AppTopBar
-import com.vineyard.aivideostudio.ui.components.StatusChip
 import com.vineyard.aivideostudio.ui.components.VideoPreviewPlayer
 import com.vineyard.aivideostudio.ui.theme.AmberAccent
 import com.vineyard.aivideostudio.ui.theme.BorderSubtle
 import com.vineyard.aivideostudio.ui.theme.EmeraldSuccess
-import com.vineyard.aivideostudio.ui.theme.StudioCardBg
+import com.vineyard.aivideostudio.ui.theme.RoseError
 import com.vineyard.aivideostudio.ui.theme.StudioDarkBg
 import com.vineyard.aivideostudio.ui.theme.StudioSurface
 import com.vineyard.aivideostudio.ui.theme.StudioSurfaceElevated
@@ -67,6 +71,9 @@ fun EditorScreen(
     val project = state.project
     var selectedTab by remember { mutableIntStateOf(0) }
 
+    // Locate active commentary soundtrack if available
+    val activeCommentaryUri = state.commentary.firstOrNull { !it.audioArtifactUri.isNullOrBlank() }?.audioArtifactUri
+
     Scaffold(
         topBar = {
             AppTopBar(
@@ -84,18 +91,76 @@ fun EditorScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // Video Preview
+            // 1. Synchronized Video Preview (Subtitles rendered in real time, Original Audio Muted)
             item {
                 Spacer(modifier = Modifier.height(4.dp))
                 VideoPreviewPlayer(
                     videoUriString = project?.currentVideoUri,
+                    captions = state.captions,
+                    commentaryUriString = activeCommentaryUri,
+                    muteOriginalAudio = true, // Enforce copyright protection during preview
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(200.dp)
+                        .height(220.dp)
                 )
             }
 
-            // Tabs: Timeline, Captions, Commentary, QA History
+            // 2. Copyright & Audio Replacement Security Card
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = StudioSurfaceElevated),
+                    shape = RoundedCornerShape(8.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Security,
+                                contentDescription = "Copyright Safe",
+                                tint = EmeraldSuccess,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    text = "Copyright Transform Active",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Source audio purged • Replaced with original AI voice",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextSecondary
+                                )
+                            }
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(if (activeCommentaryUri != null) VioletPrimary.copy(alpha = 0.2f) else EmeraldSuccess.copy(alpha = 0.2f))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = if (activeCommentaryUri != null) "LIVE AUDIO ACTIVE" else "AUDIO MUTED",
+                                color = if (activeCommentaryUri != null) VioletAccent else EmeraldSuccess,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 3. Navigation Tabs: Timeline, Captions, Commentary, QA History
             item {
                 TabRow(
                     selectedTabIndex = selectedTab,
@@ -130,10 +195,10 @@ fun EditorScreen(
                 }
             }
 
-            // Tab Content
+            // 4. Tab Content Panels
             when (selectedTab) {
                 0 -> {
-                    // Timeline Segments
+                    // Timeline Segments Panel
                     item {
                         Text(
                             text = "ACTIVE TIMELINE SEGMENTS (${state.timelineSegments.size})",
@@ -145,7 +210,17 @@ fun EditorScreen(
 
                     if (state.timelineSegments.isEmpty()) {
                         item {
-                            Text("No timeline segments recorded yet.", color = TextSecondary)
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = StudioSurface),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    text = "Base timeline active. Pacing cuts applied in final render.",
+                                    color = TextSecondary,
+                                    modifier = Modifier.padding(16.dp)
+                                )
+                            }
                         }
                     } else {
                         items(state.timelineSegments.size) { index ->
@@ -165,12 +240,12 @@ fun EditorScreen(
                                 ) {
                                     Column {
                                         Text(
-                                            text = "Segment #${index + 1} (${seg.stageApplied.name})",
+                                            text = "Cut Segment #${index + 1}",
                                             style = MaterialTheme.typography.titleMedium,
                                             color = TextPrimary
                                         )
                                         Text(
-                                            text = "Original: ${TimeUtils.formatDuration(seg.originalStart)} → ${TimeUtils.formatDuration(seg.originalEnd)}",
+                                            text = "Source: ${TimeUtils.formatDuration(seg.sourceStart)} → ${TimeUtils.formatDuration(seg.sourceEnd)}",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = TextSecondary
                                         )
@@ -182,7 +257,7 @@ fun EditorScreen(
                                             .padding(horizontal = 8.dp, vertical = 4.dp)
                                     ) {
                                         Text(
-                                            text = "${TimeUtils.formatDuration(seg.currentStart)} - ${TimeUtils.formatDuration(seg.currentEnd)}",
+                                            text = "${TimeUtils.formatDuration(seg.outputStart)} - ${TimeUtils.formatDuration(seg.outputEnd)}",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = VioletAccent,
                                             fontWeight = FontWeight.Bold
@@ -194,10 +269,10 @@ fun EditorScreen(
                     }
                 }
                 1 -> {
-                    // Captions
+                    // Captions & Subtitles Panel
                     item {
                         Text(
-                            text = "CAPTIONS & SUBTITLES (${state.captions.size})",
+                            text = "BURNED-IN SUBTITLES (${state.captions.size})",
                             style = MaterialTheme.typography.labelSmall,
                             color = TextSecondary,
                             fontWeight = FontWeight.Bold
@@ -206,11 +281,24 @@ fun EditorScreen(
 
                     if (state.captions.isEmpty()) {
                         item {
-                            Text("No captions generated yet for this project.", color = TextSecondary)
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = StudioSurface),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    text = "No captions configured for this project.",
+                                    color = TextSecondary,
+                                    modifier = Modifier.padding(16.dp)
+                                )
+                            }
                         }
                     } else {
                         items(state.captions.size) { idx ->
                             val cap = state.captions[idx]
+                            val startSec = cap.startMs / 1000.0
+                            val endSec = cap.endMs / 1000.0
+
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
                                 colors = CardDefaults.cardColors(containerColor = StudioSurface),
@@ -223,13 +311,13 @@ fun EditorScreen(
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
                                         Text(
-                                            text = "${TimeUtils.formatDuration(cap.start)} → ${TimeUtils.formatDuration(cap.end)}",
+                                            text = "${TimeUtils.formatDuration(startSec)} → ${TimeUtils.formatDuration(endSec)}",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = AmberAccent,
                                             fontWeight = FontWeight.Bold
                                         )
                                         Text(
-                                            text = "Pos (${(cap.x * 100).toInt()}%, ${(cap.y * 100).toInt()}%)",
+                                            text = "Pos (${(cap.positionX * 100).toInt()}%, ${(cap.positionY * 100).toInt()}%)",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = TextTertiary
                                         )
@@ -246,10 +334,10 @@ fun EditorScreen(
                     }
                 }
                 2 -> {
-                    // Commentary
+                    // Voiceover Commentary Panel
                     item {
                         Text(
-                            text = "VOICEOVER COMMENTARY (${state.commentary.size})",
+                            text = "LIVE VOICEOVER COMMENTARY (${state.commentary.size})",
                             style = MaterialTheme.typography.labelSmall,
                             color = TextSecondary,
                             fontWeight = FontWeight.Bold
@@ -258,7 +346,17 @@ fun EditorScreen(
 
                     if (state.commentary.isEmpty()) {
                         item {
-                            Text("No commentary synthesized yet.", color = TextSecondary)
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = StudioSurface),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    text = "No commentary track synthesized yet.",
+                                    color = TextSecondary,
+                                    modifier = Modifier.padding(16.dp)
+                                )
+                            }
                         }
                     } else {
                         items(state.commentary.size) { idx ->
@@ -270,13 +368,28 @@ fun EditorScreen(
                                 border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
                             ) {
                                 Column(modifier = Modifier.padding(12.dp)) {
-                                    Text(
-                                        text = "${TimeUtils.formatDuration(comm.start)} → ${TimeUtils.formatDuration(comm.end)}",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = VioletAccent,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "${TimeUtils.formatDuration(comm.start)} → ${TimeUtils.formatDuration(comm.end)}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = VioletAccent,
+                                            fontWeight = FontWeight.Bold
+                                        )
+
+                                        if (!comm.audioArtifactUri.isNullOrBlank()) {
+                                            Text(
+                                                text = "AUDIO SYNCED",
+                                                color = EmeraldSuccess,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(6.dp))
                                     Text(
                                         text = comm.text,
                                         style = MaterialTheme.typography.bodyLarge,
@@ -288,7 +401,7 @@ fun EditorScreen(
                     }
                 }
                 3 -> {
-                    // QA Log
+                    // QA Log Inspection Panel
                     item {
                         Text(
                             text = "INSPECTION & QA SIGN-OFFS (${state.qaResults.size})",
@@ -300,7 +413,17 @@ fun EditorScreen(
 
                     if (state.qaResults.isEmpty()) {
                         item {
-                            Text("No QA records for this project.", color = TextSecondary)
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = StudioSurface),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    text = "No QA sign-off records generated.",
+                                    color = TextSecondary,
+                                    modifier = Modifier.padding(16.dp)
+                                )
+                            }
                         }
                     } else {
                         items(state.qaResults.size) { idx ->
@@ -324,7 +447,7 @@ fun EditorScreen(
                                         )
                                         Text(
                                             text = qa.verdict.name,
-                                            color = if (qa.verdict.name == "PASS") EmeraldSuccess else AmberAccent,
+                                            color = if (qa.verdict.name == "PASS") EmeraldSuccess else RoseError,
                                             style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Bold
                                         )
