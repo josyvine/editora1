@@ -127,8 +127,15 @@ class EditorViewModel(
         _isOriginalAudioMuted.value = !_isOriginalAudioMuted.value
     }
 
+    /**
+     * Resolves the video file to be saved.
+     * Prioritizes the final rendered MP4 (which contains purged audio & burned subtitles).
+     */
     private fun resolveCurrentVideoFile(state: EditorUiState): File? {
-        val uriStr = state.project?.currentVideoUri ?: return null
+        val uriStr = state.project?.finalVideoUri?.takeIf { it.isNotBlank() }
+            ?: state.project?.currentVideoUri?.takeIf { it.isNotBlank() }
+            ?: return null
+
         val file = if (uriStr.startsWith("file://")) {
             File(Uri.parse(uriStr).path ?: "")
         } else {
@@ -136,8 +143,14 @@ class EditorViewModel(
         }
         if (file.exists() && file.length() > 0L) return file
 
-        val artifact = state.artifacts.firstOrNull { it.filePath.isNotBlank() && File(it.filePath).exists() }
-        return artifact?.let { File(it.filePath) }
+        // Fallback: Check media artifacts for final exported file
+        val finalArtifact = state.artifacts.firstOrNull {
+            it.filePath.isNotBlank() &&
+            File(it.filePath).exists() &&
+            (it.stage.name.contains("EXPORT") || it.stage.name.contains("COMPLETE"))
+        } ?: state.artifacts.firstOrNull { it.filePath.isNotBlank() && File(it.filePath).exists() }
+
+        return finalArtifact?.let { File(it.filePath) }
     }
 
     /**
