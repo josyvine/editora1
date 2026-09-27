@@ -7,7 +7,6 @@ import androidx.lifecycle.viewModelScope
 import com.vineyard.aivideostudio.core.model.PipelineStatus
 import com.vineyard.aivideostudio.core.model.Project
 import com.vineyard.aivideostudio.core.model.TimelineMap
-import com.vineyard.aivideostudio.core.model.TimelineSegment
 import com.vineyard.aivideostudio.core.model.VideoMetadata
 import com.vineyard.aivideostudio.core.util.FileUtils
 import com.vineyard.aivideostudio.core.util.JsonUtils
@@ -103,15 +102,12 @@ class CreateViewModel(
                 val baseName = fullFileName.substringBeforeLast(".")
                 val defaultName = if (_uiState.value.projectName.isBlank()) baseName else _uiState.value.projectName
 
-                // Auto-suggest aspect ratio based on video orientation
-                val suggestedRatio = if (metadata.height > metadata.width) "ORIGINAL" else "ORIGINAL"
-
                 _uiState.value = _uiState.value.copy(
                     selectedVideoUri = uri,
                     selectedVideoFileName = fullFileName,
                     videoMetadata = metadata,
                     projectName = defaultName,
-                    targetAspectRatio = suggestedRatio,
+                    targetAspectRatio = "ORIGINAL",
                     isLoading = false,
                     errorMessage = null
                 )
@@ -160,17 +156,6 @@ class CreateViewModel(
 
                 val initialTimelineMap = TimelineMap.identity(projectId, metadata.durationSeconds)
 
-                // Persist baseline timeline segment so the timeline tab is never empty
-                val initialBaseSegment = TimelineSegment(
-                    id = "tl_base_${projectId}_0",
-                    projectId = projectId,
-                    sourceStart = 0.0,
-                    sourceEnd = metadata.durationSeconds,
-                    outputStart = 0.0,
-                    outputEnd = metadata.durationSeconds,
-                    isKept = true
-                )
-
                 val project = Project(
                     id = projectId,
                     name = name,
@@ -187,7 +172,6 @@ class CreateViewModel(
 
                 projectRepository.saveProject(project)
                 projectRepository.saveTimelineMap(projectId, initialTimelineMap)
-                projectRepository.saveTimelineSegments(projectId, listOf(initialBaseSegment))
 
                 _uiState.value = state.copy(
                     isLoading = false,
