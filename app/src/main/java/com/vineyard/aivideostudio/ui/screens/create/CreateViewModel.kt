@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.vineyard.aivideostudio.core.model.PipelineStatus
 import com.vineyard.aivideostudio.core.model.Project
 import com.vineyard.aivideostudio.core.model.TimelineMap
+import com.vineyard.aivideostudio.core.model.TimelineSegment
 import com.vineyard.aivideostudio.core.model.VideoMetadata
 import com.vineyard.aivideostudio.core.util.FileUtils
 import com.vineyard.aivideostudio.core.util.JsonUtils
@@ -34,6 +35,13 @@ data class CreateUiState(
 ) {
     val isYoutubeUrlValid: Boolean
         get() = isValidYoutubeUrl(youtubeUrl)
+
+    val isShortsFormat: Boolean
+        get() {
+            val isVertical = (videoMetadata?.height ?: 0) > (videoMetadata?.width ?: 0)
+            val isShortsUrl = youtubeUrl.lowercase().contains("/shorts/")
+            return isVertical || isShortsUrl
+        }
 
     val isReadyToCreate: Boolean
         get() = selectedVideoUri != null && isYoutubeUrlValid && !isLoading
@@ -94,11 +102,16 @@ class CreateViewModel(
                 val fullFileName = UriUtils.getFileName(context, uri)
                 val baseName = fullFileName.substringBeforeLast(".")
                 val defaultName = if (_uiState.value.projectName.isBlank()) baseName else _uiState.value.projectName
+
+                // Auto-suggest aspect ratio based on video orientation
+                val suggestedRatio = if (metadata.height > metadata.width) "ORIGINAL" else "ORIGINAL"
+
                 _uiState.value = _uiState.value.copy(
                     selectedVideoUri = uri,
                     selectedVideoFileName = fullFileName,
                     videoMetadata = metadata,
                     projectName = defaultName,
+                    targetAspectRatio = suggestedRatio,
                     isLoading = false,
                     errorMessage = null
                 )
@@ -109,18 +122,18 @@ class CreateViewModel(
     fun createProject() {
         val state = _uiState.value
 
-        // Mandatory check 1: Local downloaded video file must be selected
+        // Mandatory validation 1: Downloaded video file must be provided
         if (state.selectedVideoUri == null) {
             _uiState.value = state.copy(
-                errorMessage = "Please select the downloaded local video file from your device."
+                errorMessage = "Please select the source video file from your device (Shorts or Long-Form)."
             )
             return
         }
 
-        // Mandatory check 2: Source YouTube URL must be provided and valid
+        // Mandatory validation 2: YouTube reference link must be valid
         if (state.youtubeUrl.isBlank() || !state.isYoutubeUrlValid) {
             _uiState.value = state.copy(
-                errorMessage = "Please provide the source YouTube URL (e.g. https://www.youtube.com/watch?v=... or https://youtu.be/...). Both local video and source URL are required."
+                errorMessage = "Please provide the valid source YouTube URL (e.g. https://youtube.com/shorts/... or https://youtube.com/watch?v=...)."
             )
             return
         }
@@ -139,13 +152,24 @@ class CreateViewModel(
 
                 val metadata = state.videoMetadata ?: VideoMetadata()
 
-                // Copy the local video bytes into the project's sandboxed storage
+                // Copy source media into sandboxed project storage
                 val destFile = storageManager.getSourceFile(projectId)
                 FileUtils.copyUriToFile(context, state.selectedVideoUri, destFile)
                 val sourcePath = destFile.absolutePath
                 val sourceUriString = Uri.fromFile(destFile).toString()
 
                 val initialTimelineMap = TimelineMap.identity(projectId, metadata.durationSeconds)
+
+                // Persist baseline timeline segment so the timeline tab is never empty
+                val initialBaseSegment = TimelineSegment(
+                    id = "tl_base_${projectId}_0",
+                    projectId = projectId,
+                    sourceStart = 0.0,
+                    sourceEnd = metadata.durationSeconds,
+                    outputStart = 0.0,
+                    outputEnd = metadata.durationSeconds,
+                    isKept = true
+                )
 
                 val project = Project(
                     id = projectId,
@@ -163,6 +187,7 @@ class CreateViewModel(
 
                 projectRepository.saveProject(project)
                 projectRepository.saveTimelineMap(projectId, initialTimelineMap)
+                projectRepository.saveTimelineSegments(projectId, listOf(initialBaseSegment))
 
                 _uiState.value = state.copy(
                     isLoading = false,
