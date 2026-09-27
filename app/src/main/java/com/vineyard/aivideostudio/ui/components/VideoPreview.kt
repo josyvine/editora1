@@ -114,7 +114,7 @@ fun VideoPreviewPlayer(
             }
         }
 
-        // 3. Real-Time Subtitle Overlay Layer
+        // 3. Real-Time Subtitle Overlay Layer with Intelligent Concealer Mask
         if (activeCaption != null && activeCaption.text.isNotBlank()) {
             val posX = if (activeCaption.x > 1.0f) activeCaption.x / 100f else activeCaption.x
             val posY = if (activeCaption.y > 1.0f) activeCaption.y / 100f else activeCaption.y
@@ -124,10 +124,28 @@ fun VideoPreviewPlayer(
             val biasY = ((posY.coerceIn(0.1f, 0.95f) * 2f) - 1f)
 
             val parsedTextColor = remember(activeCaption.fontColorHex) {
-                try {
-                    Color(android.graphics.Color.parseColor(activeCaption.fontColorHex))
-                } catch (_: Exception) {
+                val hex = activeCaption.fontColorHex
+                if (!hex.isNullOrBlank()) {
+                    try {
+                        Color(android.graphics.Color.parseColor(hex))
+                    } catch (_: Exception) {
+                        Color.White
+                    }
+                } else {
                     Color.White
+                }
+            }
+
+            val parsedBgColor = remember(activeCaption.backgroundColorHex) {
+                val bg = activeCaption.backgroundColorHex
+                if (!bg.isNullOrBlank() && bg != "#00000000") {
+                    try {
+                        Color(android.graphics.Color.parseColor(bg)).copy(alpha = 1.0f)
+                    } catch (_: Exception) {
+                        Color.Black
+                    }
+                } else {
+                    Color.Black // Solid 100% opaque black to guarantee full concealment of original subtitles
                 }
             }
 
@@ -135,21 +153,27 @@ fun VideoPreviewPlayer(
                 modifier = Modifier
                     .fillMaxSize()
                     .align(BiasAlignment(biasX, biasY))
-                    .padding(horizontal = 16.dp, vertical = 24.dp),
+                    .padding(horizontal = 16.dp, vertical = 20.dp),
                 contentAlignment = BiasAlignment(biasX, biasY)
             ) {
-                Text(
-                    text = activeCaption.text.uppercase(),
-                    color = parsedTextColor,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Black,
-                    textAlign = TextAlign.Center,
+                // Intelligent Concealer Box: Spans 82% of player width so underlying subtitles never peek out
+                Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xCC000000))
-                        .border(1.5.dp, Color(0x66FFFFFF), RoundedCornerShape(8.dp))
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                )
+                        .fillMaxWidth(0.82f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(parsedBgColor)
+                        .border(1.5.dp, Color(0x66FFFFFF), RoundedCornerShape(10.dp))
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = activeCaption.text.uppercase(),
+                        color = parsedTextColor,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Black,
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
         }
     }
