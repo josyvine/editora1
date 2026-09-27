@@ -1,5 +1,9 @@
 package com.vineyard.aivideostudio.ui.screens.settings
 
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -21,6 +25,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.RecordVoiceOver
@@ -66,6 +72,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -76,6 +83,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vineyard.aivideostudio.ai.model.ModelPurpose
 import com.vineyard.aivideostudio.core.util.TimeUtils
+import com.vineyard.aivideostudio.data.preferences.ProcessingPreferences
 import com.vineyard.aivideostudio.ui.components.AppTopBar
 import com.vineyard.aivideostudio.ui.components.ModelDropdown
 import com.vineyard.aivideostudio.ui.theme.AmberAccent
@@ -571,7 +579,7 @@ private fun ModelsTabContent(
 }
 
 // -------------------------------------------------------------------------
-// TAB 3: PRODUCTION PIPELINE PREFERENCES
+// TAB 3: PRODUCTION PIPELINE PREFERENCES & EXPORT STORAGE
 // -------------------------------------------------------------------------
 @Composable
 private fun PipelineTabContent(
@@ -581,6 +589,27 @@ private fun PipelineTabContent(
     onMaxRetriesChanged: (Int) -> Unit,
     onPurgeOriginalAudioChanged: (Boolean) -> Unit
 ) {
+    val context = LocalContext.current
+    var customExportDir by remember {
+        mutableStateOf(ProcessingPreferences(context).customOutputDirectoryUri)
+    }
+
+    // Launcher for selecting a permanent default export folder
+    val folderPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        if (uri != null) {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+            } catch (_: Exception) {}
+            ProcessingPreferences(context).customOutputDirectoryUri = uri.toString()
+            customExportDir = uri.toString()
+        }
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = StudioSurface),
@@ -606,13 +635,13 @@ private fun PipelineTabContent(
                 Spacer(modifier = Modifier.width(10.dp))
                 Column {
                     Text(
-                        "Pipeline & Copyright Preferences",
+                        "Pipeline & Storage Preferences",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary
                     )
                     Text(
-                        "Media3 execution and audio transformation policies",
+                        "Media3 execution and default output storage",
                         style = MaterialTheme.typography.labelSmall,
                         color = TextSecondary
                     )
@@ -621,7 +650,83 @@ private fun PipelineTabContent(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Purge Original Audio (Copyright Protection)
+            // 1. Default Export Storage Folder Selector
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Default Export Storage",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = TextPrimary
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Icon(
+                                imageVector = Icons.Filled.Folder,
+                                contentDescription = null,
+                                tint = VioletAccent,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        Text(
+                            text = if (customExportDir.isNullOrBlank()) {
+                                "Default: Public Movies/Editora (Gallery)"
+                            } else {
+                                "Custom: ${Uri.parse(customExportDir).lastPathSegment ?: customExportDir}"
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (customExportDir.isNullOrBlank()) EmeraldSuccess else VioletAccent
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = { folderPickerLauncher.launch(null) },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(40.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = StudioSurfaceElevated),
+                        shape = RoundedCornerShape(8.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
+                    ) {
+                        Icon(
+                            Icons.Filled.FolderOpen,
+                            contentDescription = null,
+                            tint = TextPrimary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Select Folder", color = TextPrimary, fontSize = 12.sp)
+                    }
+
+                    if (!customExportDir.isNullOrBlank()) {
+                        Button(
+                            onClick = {
+                                ProcessingPreferences(context).customOutputDirectoryUri = null
+                                customExportDir = null
+                            },
+                            modifier = Modifier.height(40.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = StudioSurfaceElevated),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("Reset", color = AmberAccent, fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+            HorizontalDivider(color = BorderSubtle, thickness = 1.dp)
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // 2. Purge Original Audio (Copyright Protection)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -646,7 +751,7 @@ private fun PipelineTabContent(
             HorizontalDivider(color = BorderSubtle, thickness = 1.dp)
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Keep intermediate videos
+            // 3. Keep intermediate videos
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -667,7 +772,7 @@ private fun PipelineTabContent(
             HorizontalDivider(color = BorderSubtle, thickness = 1.dp)
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Auto final QA
+            // 4. Auto final QA
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -688,7 +793,7 @@ private fun PipelineTabContent(
             HorizontalDivider(color = BorderSubtle, thickness = 1.dp)
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Max Retries
+            // 5. Max Retries
             Text(
                 text = "Maximum QA Retries: ${state.maxQaRetries}",
                 style = MaterialTheme.typography.titleSmall,
