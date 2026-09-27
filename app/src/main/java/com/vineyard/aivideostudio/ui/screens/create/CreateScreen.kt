@@ -25,8 +25,9 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.SmartDisplay
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -35,7 +36,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -49,6 +49,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -61,7 +62,6 @@ import com.vineyard.aivideostudio.ui.components.AppTopBar
 import com.vineyard.aivideostudio.ui.components.VideoPreviewPlayer
 import com.vineyard.aivideostudio.ui.theme.AmberAccent
 import com.vineyard.aivideostudio.ui.theme.BorderSubtle
-import com.vineyard.aivideostudio.ui.theme.CyanInfo
 import com.vineyard.aivideostudio.ui.theme.EmeraldSuccess
 import com.vineyard.aivideostudio.ui.theme.RoseError
 import com.vineyard.aivideostudio.ui.theme.StudioCardBg
@@ -100,8 +100,8 @@ fun CreateScreen(
     Scaffold(
         topBar = {
             AppTopBar(
-                title = "New Project",
-                subtitle = "Pair downloaded local video with source YouTube URL"
+                title = "New Production",
+                subtitle = "Autonomous Video Editor & Copyright Transformation"
             )
         },
         containerColor = StudioDarkBg
@@ -120,8 +120,8 @@ fun CreateScreen(
                 OutlinedTextField(
                     value = state.projectName,
                     onValueChange = { viewModel.onProjectNameChanged(it) },
-                    label = { Text("Project Name") },
-                    placeholder = { Text("e.g. YouTube Video Edit") },
+                    label = { Text("Project Title") },
+                    placeholder = { Text("e.g. Kyrie Irving Meme Commentary Edit") },
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("create_project_name_input"),
@@ -138,7 +138,47 @@ fun CreateScreen(
                 )
             }
 
-            // STEP 1: Downloaded Local Video File (Required)
+            // Copyright Protection & Transformative Editing Banner
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = StudioSurfaceElevated),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Security,
+                            contentDescription = "Copyright Safety",
+                            tint = EmeraldSuccess,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = "Automated Copyright Transformation",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Original audio will be purged. Dead air will be trimmed, subtitles burned in, and an original AI voiceover soundtrack injected.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary,
+                                lineHeight = 16.sp
+                            )
+                        }
+                    }
+                }
+            }
+
+            // STEP 1: Downloaded Local Video File (Supports Shorts & Long-Form)
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -169,21 +209,21 @@ fun CreateScreen(
                             Column(modifier = Modifier.weight(1f)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
-                                        text = "Downloaded Local Video",
+                                        text = "Source Video File",
                                         style = MaterialTheme.typography.titleSmall,
                                         fontWeight = FontWeight.Bold,
                                         color = TextPrimary
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "(Editable)",
+                                        text = "(Shorts or Long-Form)",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = if (state.selectedVideoUri != null) EmeraldSuccess else AmberAccent,
                                         fontWeight = FontWeight.SemiBold
                                     )
                                 }
                                 Text(
-                                    text = "The local video file on device for physical Media3 cuts and renders",
+                                    text = "The local video on device for transformative cuts and rendering",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = TextSecondary
                                 )
@@ -204,6 +244,7 @@ fun CreateScreen(
                             // Selected Video Preview & Info
                             VideoPreviewPlayer(
                                 videoUriString = state.selectedVideoUri.toString(),
+                                muteOriginalAudio = false,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(180.dp)
@@ -214,17 +255,36 @@ fun CreateScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = "${state.videoMetadata?.width}x${state.videoMetadata?.height}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = TextSecondary
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    val isVertical = (state.videoMetadata?.height ?: 0) > (state.videoMetadata?.width ?: 0)
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(VioletPrimary.copy(alpha = 0.2f))
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = if (isVertical) "SHORTS / REEL (9:16)" else "STANDARD (16:9)",
+                                            color = VioletAccent,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "${state.videoMetadata?.width}x${state.videoMetadata?.height}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = TextSecondary
+                                    )
+                                }
+
                                 Text(
                                     text = TimeUtils.formatDuration(state.videoMetadata?.durationSeconds ?: 0.0),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = VioletAccent,
                                     fontWeight = FontWeight.Bold
                                 )
+
                                 Text(
                                     text = FileUtils.formatBytes(state.videoMetadata?.fileSize ?: 0L),
                                     style = MaterialTheme.typography.bodySmall,
@@ -256,7 +316,7 @@ fun CreateScreen(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(140.dp)
+                                    .height(130.dp)
                                     .clip(RoundedCornerShape(10.dp))
                                     .background(StudioCardBg)
                                     .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp))
@@ -270,11 +330,11 @@ fun CreateScreen(
                                         imageVector = Icons.Filled.Upload,
                                         contentDescription = null,
                                         tint = VioletAccent,
-                                        modifier = Modifier.size(34.dp)
+                                        modifier = Modifier.size(32.dp)
                                     )
                                     Spacer(modifier = Modifier.height(6.dp))
                                     Text(
-                                        text = "Tap to choose downloaded video from device",
+                                        text = "Choose video from device (Shorts or Long-Form)",
                                         style = MaterialTheme.typography.titleSmall,
                                         fontWeight = FontWeight.SemiBold,
                                         color = TextPrimary
@@ -291,7 +351,7 @@ fun CreateScreen(
                 }
             }
 
-            // STEP 2: Source YouTube URL (Required)
+            // STEP 2: Source YouTube Reference URL
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -329,14 +389,14 @@ fun CreateScreen(
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "(AI Analysis)",
+                                        text = "(Context Link)",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = if (state.isYoutubeUrlValid) EmeraldSuccess else AmberAccent,
                                         fontWeight = FontWeight.SemiBold
                                     )
                                 }
                                 Text(
-                                    text = "Gemini first analyzes this video for scene context, transcripts & edit cuts",
+                                    text = "Gemini analyzes this reference URL for scene context and scriptwriting",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = TextSecondary
                                 )
@@ -357,7 +417,7 @@ fun CreateScreen(
                             value = state.youtubeUrl,
                             onValueChange = { viewModel.onYoutubeUrlChanged(it) },
                             label = { Text("Public YouTube Source URL") },
-                            placeholder = { Text("https://www.youtube.com/watch?v=... or https://youtu.be/...") },
+                            placeholder = { Text("https://youtube.com/shorts/... or https://youtube.com/watch?v=...") },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag("create_youtube_url_input"),
@@ -395,7 +455,6 @@ fun CreateScreen(
 
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        // URL validation state note
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (state.isYoutubeUrlValid) {
                                 Icon(
@@ -419,7 +478,7 @@ fun CreateScreen(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "Enter a valid YouTube link (e.g., https://youtube.com/watch?v=... or https://youtu.be/...)",
+                                    text = "Supports standard YouTube and Shorts URLs",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = AmberAccent
                                 )
@@ -432,7 +491,7 @@ fun CreateScreen(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "Paste the URL of the exact YouTube video downloaded above",
+                                    text = "Paste the URL of the YouTube video downloaded above",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = TextTertiary
                                 )
@@ -445,7 +504,7 @@ fun CreateScreen(
             // Target Aspect Ratio Selector
             item {
                 Text(
-                    text = "TARGET ASPECT RATIO",
+                    text = "TARGET PRODUCTION ASPECT RATIO",
                     style = MaterialTheme.typography.labelSmall,
                     color = TextSecondary,
                     fontWeight = FontWeight.Bold
@@ -489,14 +548,13 @@ fun CreateScreen(
                 ) {
                     Column(modifier = Modifier.padding(14.dp)) {
                         Text(
-                            text = "STUDIO LAUNCH REQUIREMENTS",
+                            text = "PRODUCTION PIPELINE READINESS",
                             style = MaterialTheme.typography.labelSmall,
                             color = VioletAccent,
                             fontWeight = FontWeight.Bold
                         )
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        // Item 1
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 imageVector = if (state.selectedVideoUri != null) Icons.Filled.CheckCircle else Icons.AutoMirrored.Filled.HelpOutline,
@@ -507,9 +565,9 @@ fun CreateScreen(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = if (state.selectedVideoUri != null) {
-                                    "Local Video: ${state.selectedVideoFileName ?: "Ready"} (${TimeUtils.formatDuration(state.videoMetadata?.durationSeconds ?: 0.0)})"
+                                    "Local Media: ${state.selectedVideoFileName ?: "Ready"} (${TimeUtils.formatDuration(state.videoMetadata?.durationSeconds ?: 0.0)})"
                                 } else {
-                                    "Local Video: Required (Select video file from device)"
+                                    "Local Media: Required (Select video file from device)"
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = if (state.selectedVideoUri != null) TextPrimary else TextSecondary
@@ -518,7 +576,6 @@ fun CreateScreen(
 
                         Spacer(modifier = Modifier.height(6.dp))
 
-                        // Item 2
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 imageVector = if (state.isYoutubeUrlValid) Icons.Filled.CheckCircle else Icons.AutoMirrored.Filled.HelpOutline,
@@ -529,9 +586,9 @@ fun CreateScreen(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = if (state.isYoutubeUrlValid) {
-                                    "Source YouTube URL: Linked for Gemini reasoning"
+                                    "YouTube Context: Linked for AI reasoning"
                                 } else {
-                                    "Source YouTube URL: Required (Paste original YouTube URL)"
+                                    "YouTube Context: Required (Paste YouTube link)"
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = if (state.isYoutubeUrlValid) TextPrimary else TextSecondary
@@ -541,7 +598,7 @@ fun CreateScreen(
                 }
             }
 
-            // Error display
+            // Error Message Card
             if (state.errorMessage != null) {
                 item {
                     Box(
@@ -561,7 +618,7 @@ fun CreateScreen(
                 }
             }
 
-            // Create button
+            // Submit Button
             item {
                 Button(
                     onClick = { viewModel.createProject() },
@@ -579,7 +636,7 @@ fun CreateScreen(
                     if (state.isLoading) {
                         CircularProgressIndicator(color = TextPrimary, modifier = Modifier.size(24.dp))
                         Spacer(modifier = Modifier.width(10.dp))
-                        Text("Preparing Studio...", color = TextPrimary)
+                        Text("Configuring Studio Pipeline...", color = TextPrimary)
                     } else {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
@@ -602,7 +659,7 @@ fun CreateScreen(
                 if (!state.isReadyToCreate && !state.isLoading) {
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Both local video and source YouTube URL must be added to open studio.",
+                        text = "Add both local video and source YouTube URL to start automated production.",
                         style = MaterialTheme.typography.labelSmall,
                         color = TextTertiary,
                         modifier = Modifier.padding(horizontal = 4.dp)
