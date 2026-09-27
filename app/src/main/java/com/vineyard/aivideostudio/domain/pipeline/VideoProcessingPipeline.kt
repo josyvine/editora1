@@ -503,7 +503,25 @@ class VideoProcessingPipeline(
         )
 
         val finalVideoUri = when (exportResult) {
-            is AppResult.Success -> Uri.fromFile(finalOutputFile).toString()
+            is AppResult.Success -> {
+                val uriStr = Uri.fromFile(finalOutputFile).toString()
+                currentVideoUri = uriStr
+                projectRepository.updateCurrentVideoUri(projectId, uriStr)
+
+                val finalArtifact = MediaArtifact(
+                    id = "art_final_${System.currentTimeMillis()}",
+                    projectId = projectId,
+                    stage = PipelineStatus.EXPORTING,
+                    type = ArtifactType.FINAL_VIDEO,
+                    fileUri = uriStr,
+                    filePath = finalOutputFile.absolutePath,
+                    mimeType = "video/mp4",
+                    sizeBytes = finalOutputFile.length(),
+                    durationSeconds = currentDuration
+                )
+                projectRepository.recordArtifact(finalArtifact)
+                uriStr
+            }
             is AppResult.Error -> {
                 logger.log(projectId, PipelineStatus.EXPORTING, "Export failed: ${exportResult.error.message}", LogSeverity.ERROR)
                 currentVideoUri
