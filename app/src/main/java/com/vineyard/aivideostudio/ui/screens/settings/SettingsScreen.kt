@@ -1,8 +1,5 @@
 package com.vineyard.aivideostudio.ui.screens.settings
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -27,6 +24,7 @@ import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Visibility
@@ -39,6 +37,8 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -64,6 +64,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
@@ -116,7 +117,7 @@ fun SettingsScreen(
         topBar = {
             AppTopBar(
                 title = "Settings",
-                subtitle = "Studio Preferences & Configuration"
+                subtitle = "Studio Preferences & Live API Routing"
             )
         },
         containerColor = StudioDarkBg
@@ -258,7 +259,8 @@ fun SettingsScreen(
                                 state = state,
                                 onKeepIntermediateVideosChanged = { viewModel.onKeepIntermediateVideosChanged(it) },
                                 onAutoFinalQaChanged = { viewModel.onAutoFinalQaChanged(it) },
-                                onMaxRetriesChanged = { viewModel.onMaxRetriesChanged(it) }
+                                onMaxRetriesChanged = { viewModel.onMaxRetriesChanged(it) },
+                                onPurgeOriginalAudioChanged = { viewModel.onPurgeOriginalAudioChanged(it) }
                             )
                         }
                     }
@@ -267,6 +269,7 @@ fun SettingsScreen(
                         item {
                             VoicesTabContent(
                                 state = state,
+                                onVoiceSelected = { viewModel.setCommentaryVoice(it) },
                                 onOpenRegisterDialog = { showVoiceDialog = true }
                             )
                         }
@@ -297,7 +300,7 @@ fun SettingsScreen(
 }
 
 // -------------------------------------------------------------------------
-// TAB 1: GEMINI API KEY CONFIGURATION
+// TAB 1: GEMINI API KEY CONFIGURATION & QUOTA AUDIT
 // -------------------------------------------------------------------------
 @Composable
 private fun ApiKeyTabContent(
@@ -339,7 +342,7 @@ private fun ApiKeyTabContent(
                         color = TextPrimary
                     )
                     Text(
-                        "Direct REST access to Google Generative AI",
+                        "REST & Bidi WebSocket Live Streaming",
                         style = MaterialTheme.typography.labelSmall,
                         color = TextSecondary
                     )
@@ -349,7 +352,7 @@ private fun ApiKeyTabContent(
             Spacer(modifier = Modifier.height(14.dp))
 
             Text(
-                text = "Stored securely in encrypted preferences and injected via BuildConfig. Enter or update your API key below:",
+                text = "Enter your Google AI Studio API key. This key authenticates both REST reasoning and WebSocket live voice synthesis:",
                 style = MaterialTheme.typography.bodySmall,
                 color = TextSecondary
             )
@@ -359,7 +362,7 @@ private fun ApiKeyTabContent(
             OutlinedTextField(
                 value = inputKey,
                 onValueChange = { inputKey = it },
-                placeholder = { Text("Paste API Key: AIzaSy...") },
+                placeholder = { Text("AIzaSy...") },
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("settings_api_key_input"),
@@ -414,18 +417,18 @@ private fun ApiKeyTabContent(
                 if (state.isFetchingModels) {
                     CircularProgressIndicator(color = TextPrimary, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Discovering Models...", color = TextPrimary)
+                    Text("Discovering Live & REST Models...", color = TextPrimary)
                 } else {
                     Icon(Icons.Filled.CloudDownload, contentDescription = null, tint = TextPrimary)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Fetch Available Models", color = TextPrimary, fontWeight = FontWeight.Bold)
+                    Text("Sync Available Models", color = TextPrimary, fontWeight = FontWeight.Bold)
                 }
             }
 
             if (state.lastSyncTime > 0) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Last model sync: ${TimeUtils.formatTimestamp(state.lastSyncTime)}",
+                    text = "Last catalog sync: ${TimeUtils.formatTimestamp(state.lastSyncTime)}",
                     style = MaterialTheme.typography.labelSmall,
                     color = TextTertiary
                 )
@@ -435,7 +438,7 @@ private fun ApiKeyTabContent(
 
     Spacer(modifier = Modifier.height(12.dp))
 
-    // Connectivity status card
+    // Tier Quota & Rate Limit Overview Card
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = StudioSurface),
@@ -443,31 +446,22 @@ private fun ApiKeyTabContent(
         border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
-            Text("REST API STATUS", style = MaterialTheme.typography.labelSmall, color = VioletAccent, fontWeight = FontWeight.Bold)
+            Text("RATE LIMIT & QUOTA ARCHITECTURE", style = MaterialTheme.typography.labelSmall, color = VioletAccent, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(6.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = if (state.apiKey.isNotBlank()) Icons.Filled.CheckCircle else Icons.Filled.Shield,
-                    contentDescription = null,
-                    tint = if (state.apiKey.isNotBlank()) EmeraldSuccess else AmberAccent,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = if (state.apiKey.isNotBlank()) "Direct Gemini REST API Connected" else "API Key Pending Configuration",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextPrimary,
-                    fontWeight = FontWeight.Medium
-                )
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Live Commentary Models:", color = TextSecondary, style = MaterialTheme.typography.labelSmall)
+                Text("UNLIMITED RPM / RPD", color = EmeraldSuccess, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
             }
             Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Endpoints: generativelanguage.googleapis.com/v1beta • SSE Streaming Enabled",
-                style = MaterialTheme.typography.labelSmall,
-                color = TextSecondary,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 10.sp
-            )
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Flash Lite Reasoning:", color = TextSecondary, style = MaterialTheme.typography.labelSmall)
+                Text("500 RPD / 15 RPM", color = TextPrimary, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("REST Preview TTS:", color = TextSecondary, style = MaterialTheme.typography.labelSmall)
+                Text("10 RPD / 3 RPM (Avoided)", color = AmberAccent, style = MaterialTheme.typography.labelSmall)
+            }
         }
     }
 }
@@ -510,13 +504,13 @@ private fun ModelsTabContent(
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
                         Text(
-                            "AI Model Assignments",
+                            "Autonomous Model Routing",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = TextPrimary
                         )
                         Text(
-                            "Per-purpose model routing",
+                            "Dedicated models per production stage",
                             style = MaterialTheme.typography.labelSmall,
                             color = TextSecondary
                         )
@@ -540,7 +534,7 @@ private fun ModelsTabContent(
 
             Spacer(modifier = Modifier.height(14.dp))
             Text(
-                text = "Assign autonomous models for each specific stage in the editing pipeline:",
+                text = "Live Voice models are prioritized for voiceover commentary to avoid 429 quota exhaustion:",
                 style = MaterialTheme.typography.bodySmall,
                 color = TextSecondary
             )
@@ -550,16 +544,16 @@ private fun ModelsTabContent(
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 ModelPurpose.entries.forEach { purpose ->
                     val selectedId = state.modelConfigs[purpose.name] ?: when (purpose) {
-                        ModelPurpose.VIDEO_ANALYSIS -> "gemini-3.5-flash"
-                        ModelPurpose.AUDIO_TRANSCRIPTION -> "gemini-3.5-flash"
-                        ModelPurpose.EDITING_DIRECTOR -> "gemini-3.5-flash"
-                        ModelPurpose.COMMENTARY -> "gemini-3.5-flash"
-                        ModelPurpose.TEXT_TO_SPEECH -> "gemini-2.5-flash-preview-tts"
-                        ModelPurpose.LIVE_VOICE -> "gemini-2.5-flash-native-audio-preview-12-2025"
+                        ModelPurpose.VIDEO_ANALYSIS -> "gemini-3.1-flash-lite"
+                        ModelPurpose.AUDIO_TRANSCRIPTION -> "gemini-3.1-flash-lite"
+                        ModelPurpose.EDITING_DIRECTOR -> "gemini-3.1-flash-lite"
+                        ModelPurpose.COMMENTARY -> "gemini-3.1-flash-lite"
+                        ModelPurpose.LIVE_VOICE -> "gemini-3.8-live"
+                        ModelPurpose.TEXT_TO_SPEECH -> "gemini-3.8-flash-lite-tts"
                     }
 
                     val eligibleModels = state.availableModels.filter {
-                        it.supportedPurposes.contains(purpose) || it.capabilities.supportsText
+                        it.supportedPurposes.contains(purpose) || (purpose == ModelPurpose.LIVE_VOICE && it.capabilities.supportsLive)
                     }
 
                     ModelDropdown(
@@ -584,7 +578,8 @@ private fun PipelineTabContent(
     state: SettingsUiState,
     onKeepIntermediateVideosChanged: (Boolean) -> Unit,
     onAutoFinalQaChanged: (Boolean) -> Unit,
-    onMaxRetriesChanged: (Int) -> Unit
+    onMaxRetriesChanged: (Int) -> Unit,
+    onPurgeOriginalAudioChanged: (Boolean) -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -611,13 +606,13 @@ private fun PipelineTabContent(
                 Spacer(modifier = Modifier.width(10.dp))
                 Column {
                     Text(
-                        "Pipeline Preferences",
+                        "Pipeline & Copyright Preferences",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary
                     )
                     Text(
-                        "Deterministic Media3 execution & verification",
+                        "Media3 execution and audio transformation policies",
                         style = MaterialTheme.typography.labelSmall,
                         color = TextSecondary
                     )
@@ -625,6 +620,31 @@ private fun PipelineTabContent(
             }
 
             Spacer(modifier = Modifier.height(16.dp))
+
+            // Purge Original Audio (Copyright Protection)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Purge Original Audio", style = MaterialTheme.typography.titleSmall, color = TextPrimary)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Icon(Icons.Filled.Security, contentDescription = null, tint = EmeraldSuccess, modifier = Modifier.size(16.dp))
+                    }
+                    Text("Mandatory copyright protection: Removes source audio and replaces with AI voiceover", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                }
+                Switch(
+                    checked = state.purgeOriginalAudio,
+                    onCheckedChange = onPurgeOriginalAudioChanged,
+                    colors = SwitchDefaults.colors(checkedThumbColor = TextPrimary, checkedTrackColor = EmeraldSuccess)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+            HorizontalDivider(color = BorderSubtle, thickness = 1.dp)
+            Spacer(modifier = Modifier.height(14.dp))
 
             // Keep intermediate videos
             Row(
@@ -692,33 +712,15 @@ private fun PipelineTabContent(
             )
         }
     }
-
-    Spacer(modifier = Modifier.height(12.dp))
-
-    // Engine Specs card
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = StudioSurface),
-        shape = RoundedCornerShape(12.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
-    ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Text("MEDIA3 TRANSFORMATION SPECIFICATION", style = MaterialTheme.typography.labelSmall, color = CyanInfo, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(6.dp))
-            Text("• Target Export: 1080p (1920x1080) @ 60 FPS", style = MaterialTheme.typography.bodySmall, color = TextPrimary)
-            Text("• Codec Profile: H.264 High Profile / AAC-LC 192kbps Stereo", style = MaterialTheme.typography.bodySmall, color = TextPrimary)
-            Text("• Color Matrix: Rec. 709 Standard Range", style = MaterialTheme.typography.bodySmall, color = TextPrimary)
-            Text("• Trimming Accuracy: Sample-Accurate Media3 Transformer", style = MaterialTheme.typography.bodySmall, color = TextPrimary)
-        }
-    }
 }
 
 // -------------------------------------------------------------------------
-// TAB 4: VOICE MANAGEMENT & REPLICATION
+// TAB 4: VOICE MANAGEMENT & GEMINI LIVE VOICES
 // -------------------------------------------------------------------------
 @Composable
 private fun VoicesTabContent(
     state: SettingsUiState,
+    onVoiceSelected: (String) -> Unit,
     onOpenRegisterDialog: () -> Unit
 ) {
     Card(
@@ -746,13 +748,13 @@ private fun VoicesTabContent(
                 Spacer(modifier = Modifier.width(10.dp))
                 Column {
                     Text(
-                        "Voice Management & Replication",
+                        "Live Commentator Voices",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary
                     )
                     Text(
-                        "Consent-verified voice replication profiles",
+                        "Prebuilt neural voices with expressive screaming & hype range",
                         style = MaterialTheme.typography.labelSmall,
                         color = TextSecondary
                     )
@@ -761,12 +763,40 @@ private fun VoicesTabContent(
 
             Spacer(modifier = Modifier.height(14.dp))
             Text(
-                text = "Each replicated voice profile requires consent verification to ensure policy adherence and prevent unauthorized cloning.",
+                text = "Select the active voice for the Gemini Live WebSocket commentary engine:",
                 style = MaterialTheme.typography.bodySmall,
                 color = TextSecondary
             )
 
+            Spacer(modifier = Modifier.height(12.dp))
+
+            val liveVoices = listOf("Puck", "Fenrir", "Aoede", "Charon", "Kore")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                liveVoices.forEach { voiceName ->
+                    val selected = state.selectedVoice == voiceName
+                    FilterChip(
+                        selected = selected,
+                        onClick = { onVoiceSelected(voiceName) },
+                        label = { Text(voiceName) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = VioletPrimary,
+                            selectedLabelColor = TextPrimary,
+                            containerColor = StudioCardBg,
+                            labelColor = TextSecondary
+                        )
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider(color = BorderSubtle, thickness = 1.dp)
             Spacer(modifier = Modifier.height(14.dp))
+
+            Text("CONSENT-VERIFIED REPLICATION PROFILES", style = MaterialTheme.typography.labelSmall, color = VioletAccent, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(8.dp))
 
             state.voices.forEach { voice ->
                 Box(
@@ -809,7 +839,7 @@ private fun VoicesTabContent(
                     .fillMaxWidth()
                     .height(46.dp)
                     .testTag("settings_register_voice_button"),
-                colors = ButtonDefaults.buttonColors(containerColor = VioletPrimary),
+                colors = ButtonDefaults.buttonColors(containerColor = StudioSurfaceElevated),
                 shape = RoundedCornerShape(8.dp)
             ) {
                 Icon(Icons.Filled.Add, contentDescription = null, tint = TextPrimary)
@@ -866,15 +896,7 @@ private fun AboutTabContent() {
             Spacer(modifier = Modifier.height(14.dp))
 
             Text(
-                text = "Built with Kotlin, Coroutines, Jetpack Compose & Android Media3.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = TextPrimary
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Text(
-                text = "Autonomous AI-directed video editing state machine with deterministic sample-accurate Media3 execution, multi-stage QA feedback loops, and floating persistent logging.",
+                text = "Autonomous AI-directed video editing state machine with deterministic sample-accurate Media3 execution, automated copyright transformation, and Gemini Multimodal Live voiceover acting.",
                 style = MaterialTheme.typography.bodySmall,
                 color = TextSecondary
             )
@@ -883,7 +905,6 @@ private fun AboutTabContent() {
             HorizontalDivider(color = BorderSubtle, thickness = 1.dp)
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Tech specs breakdown
             Text("SYSTEM & ENGINE ARCHITECTURE", style = MaterialTheme.typography.labelSmall, color = VioletAccent, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(6.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -892,18 +913,13 @@ private fun AboutTabContent() {
             }
             Spacer(modifier = Modifier.height(4.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Local Persistence", color = TextSecondary, style = MaterialTheme.typography.labelSmall)
-                Text("SQLite Room 2.7.0", color = TextPrimary, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
+                Text("Live Voice Engine", color = TextSecondary, style = MaterialTheme.typography.labelSmall)
+                Text("Gemini Live Bidi WebSocket", color = EmeraldSuccess, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
             }
             Spacer(modifier = Modifier.height(4.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("AI Connectivity", color = TextSecondary, style = MaterialTheme.typography.labelSmall)
-                Text("Gemini 3.5 & 2.5 REST", color = TextPrimary, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
-            }
-            Spacer(modifier = Modifier.height(4.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("UI Design System", color = TextSecondary, style = MaterialTheme.typography.labelSmall)
-                Text("Material 3 (M3)", color = TextPrimary, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
+                Text("Copyright Policy", color = TextSecondary, style = MaterialTheme.typography.labelSmall)
+                Text("Original Audio Stripped", color = TextPrimary, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
             }
         }
     }
@@ -934,7 +950,7 @@ private fun RegisterVoiceDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    "Provide a profile title and description for narrator voice replication:",
+                    "Provide a profile title and description for voice replication:",
                     style = MaterialTheme.typography.bodySmall,
                     color = TextSecondary
                 )
@@ -943,7 +959,7 @@ private fun RegisterVoiceDialog(
                     value = voiceName,
                     onValueChange = { voiceName = it },
                     label = { Text("Voice Profile Name") },
-                    placeholder = { Text("e.g. Director Voice") },
+                    placeholder = { Text("e.g. Hype Commentator") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -957,8 +973,8 @@ private fun RegisterVoiceDialog(
                 OutlinedTextField(
                     value = voiceDescription,
                     onValueChange = { voiceDescription = it },
-                    label = { Text("Description / Character") },
-                    placeholder = { Text("e.g. Professional documentary narrator") },
+                    label = { Text("Description") },
+                    placeholder = { Text("e.g. High energy viral sports narrator") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
