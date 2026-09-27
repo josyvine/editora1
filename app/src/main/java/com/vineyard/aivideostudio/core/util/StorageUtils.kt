@@ -85,7 +85,7 @@ object StorageUtils {
 
             AppResult.Success(uri)
         } catch (e: Exception) {
-            AppResult.Error(AppError.StorageError("Failed saving video to gallery: ${e.message}", e))
+            AppResult.Error(AppError.StorageError("Failed saving video to gallery: ${e.message}"))
         }
     }
 
@@ -123,7 +123,7 @@ object StorageUtils {
 
             AppResult.Success(targetUri)
         } catch (e: Exception) {
-            AppResult.Error(AppError.StorageError("Failed exporting video to custom directory: ${e.message}", e))
+            AppResult.Error(AppError.StorageError("Failed exporting video to custom directory: ${e.message}"))
         }
     }
 
@@ -149,7 +149,7 @@ object StorageUtils {
 
             AppResult.Success(targetUri)
         } catch (e: Exception) {
-            AppResult.Error(AppError.StorageError("Failed writing video: ${e.message}", e))
+            AppResult.Error(AppError.StorageError("Failed writing video: ${e.message}"))
         }
     }
 }
