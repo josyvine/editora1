@@ -5,6 +5,7 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.util.Base64
+import android.util.Log
 import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
@@ -33,6 +34,10 @@ class LiveCommentatorManager(
     private val dispatcherProvider: DispatcherProvider,
     private val logger: ProcessingLogger
 ) {
+
+    companion object {
+        private const val TAG = "LiveCommentatorManager"
+    }
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private var webView: WebView? = null
@@ -64,8 +69,8 @@ class LiveCommentatorManager(
 
                 webChromeClient = object : WebChromeClient() {
                     override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
-                        consoleMessage?.let {
-                            logger.d("LiveCommentatorWebView", "[${it.messageLevel()}] ${it.message()} (${it.sourceId()}:${it.lineNumber()})")
+                        if (consoleMessage != null) {
+                            Log.d("LiveCommentatorWebView", "[${consoleMessage.messageLevel()}] ${consoleMessage.message()} (${consoleMessage.sourceId()}:${consoleMessage.lineNumber()})")
                         }
                         return true
                     }
@@ -74,7 +79,7 @@ class LiveCommentatorManager(
                 webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView?, url: String?) {
                         super.onPageFinished(view, url)
-                        logger.i("LiveCommentatorManager", "Headless Live Commentator engine loaded successfully: $url")
+                        Log.i(TAG, "Headless Live Commentator engine loaded successfully: $url")
                         isWebViewReady.set(true)
                         pageLoadedDeferred?.complete(true)
                     }
@@ -86,7 +91,7 @@ class LiveCommentatorManager(
                     ) {
                         super.onReceivedError(view, request, error)
                         val errorDescription = error?.description?.toString() ?: "Unknown WebView Error"
-                        logger.e("LiveCommentatorManager", "Failed loading engine: $errorDescription")
+                        Log.e(TAG, "Failed loading engine: $errorDescription")
                         pageLoadedDeferred?.complete(false)
                     }
                 }
@@ -99,11 +104,11 @@ class LiveCommentatorManager(
                         voiceNameProvider = { fetchVoiceNameSync() },
                         listener = object : LiveCommentaryListener {
                             override fun onConnecting() {
-                                logger.i("LiveCommentator", "Establishing Gemini Live Bidi WebSocket connection...")
+                                Log.i(TAG, "Establishing Gemini Live Bidi WebSocket connection...")
                             }
 
                             override fun onConnected() {
-                                logger.i("LiveCommentator", "Gemini Live Bidi session authenticated and connected.")
+                                Log.i(TAG, "Gemini Live Bidi session authenticated and connected.")
                             }
 
                             override fun onAudioChunkReceived(base64PcmData: String) {
@@ -111,7 +116,7 @@ class LiveCommentatorManager(
                             }
 
                             override fun onCommentaryText(text: String) {
-                                logger.d("LiveCommentatorTranscript", text)
+                                Log.d("LiveCommentatorTranscript", text)
                             }
 
                             override fun onCommentaryFinished() {
@@ -123,7 +128,7 @@ class LiveCommentatorManager(
                             }
 
                             override fun onDiagnostic(message: String, category: String) {
-                                logger.d("LiveDiagnostic[$category]", message)
+                                Log.d("LiveDiagnostic[$category]", message)
                             }
                         }
                     ),
@@ -141,11 +146,11 @@ class LiveCommentatorManager(
             if (loaded) {
                 AppResult.Success(Unit)
             } else {
-                AppResult.Error(AppError.InitializationError("Timed out waiting for Live Commentator WebView initialization."))
+                AppResult.Error(AppError.MediaProcessingError("Timed out waiting for Live Commentator WebView initialization."))
             }
         } catch (e: Exception) {
-            logger.e("LiveCommentatorManager", "Initialization failed with exception: ${e.message}", e)
-            AppResult.Error(AppError.InitializationError(e.message ?: "Failed to initialize Live Commentator WebView"))
+            Log.e(TAG, "Initialization failed with exception: ${e.message}", e)
+            AppResult.Error(AppError.MediaProcessingError(e.message ?: "Failed to initialize Live Commentator WebView", e))
         }
     }
 
@@ -169,7 +174,7 @@ class LiveCommentatorManager(
         }
 
         if (isSessionActive.getAndSet(true)) {
-            return@withContext AppResult.Error(AppError.PipelineError("A live commentary session is already active."))
+            return@withContext AppResult.Error(AppError.MediaProcessingError("A live commentary session is already active."))
         }
 
         // Prepare target output file
@@ -201,7 +206,7 @@ class LiveCommentatorManager(
             deferred.await()
         } ?: run {
             stopCurrentSessionSync()
-            AppResult.Error(AppError.NetworkTimeout("Gemini Live Commentary stream timed out after 120 seconds."))
+            AppResult.Error(AppError.NetworkError("Gemini Live Commentary stream timed out after 120 seconds."))
         }
 
         isSessionActive.set(false)
@@ -218,7 +223,7 @@ class LiveCommentatorManager(
                 activeFileOutputStream?.write(rawBytes)
             }
         } catch (e: Exception) {
-            logger.e("LiveCommentatorManager", "Failed writing PCM audio chunk: ${e.message}", e)
+            Log.e(TAG, "Failed writing PCM audio chunk: ${e.message}", e)
         }
     }
 
@@ -232,14 +237,13 @@ class LiveCommentatorManager(
                 activeFileOutputStream?.close()
                 activeFileOutputStream = null
             } catch (e: Exception) {
-                logger.e("LiveCommentatorManager", "Error closing output stream: ${e.message}")
+                Log.e(TAG, "Error closing output stream: ${e.message}")
             }
         }
 
         commentaryDeferred?.let { def ->
             if (def.isActive) {
-                // Signal success with the recorded file
-                def.complete(AppResult.Success(File("").apply { /* Target file reference maintained by caller */ }))
+                def.complete(AppResult.Success(File("")))
             }
         }
     }
@@ -248,19 +252,17 @@ class LiveCommentatorManager(
      * Invoked when an error is returned by the Live WebSocket engine.
      */
     private fun handleCommentaryError(errorMessage: String) {
-        logger.e("LiveCommentatorManager", "Live Commentary Engine error: $errorMessage")
+        Log.e(TAG, "Live Commentary Engine error: $errorMessage")
         synchronized(this) {
             try {
                 activeFileOutputStream?.close()
                 activeFileOutputStream = null
-            } catch (e: Exception) {
-                // ignore
-            }
+            } catch (_: Exception) {}
         }
 
         commentaryDeferred?.let { def ->
             if (def.isActive) {
-                def.complete(AppResult.Error(AppError.AiGenerationError(errorMessage)))
+                def.complete(AppResult.Error(AppError.MediaProcessingError("Live commentary engine error: $errorMessage")))
             }
         }
         isSessionActive.set(false)
@@ -274,9 +276,7 @@ class LiveCommentatorManager(
             try {
                 activeFileOutputStream?.close()
                 activeFileOutputStream = null
-            } catch (e: Exception) {
-                // ignore
-            }
+            } catch (_: Exception) {}
         }
         isSessionActive.set(false)
     }
@@ -309,7 +309,7 @@ class LiveCommentatorManager(
         return kotlinx.coroutines.runBlocking(dispatcherProvider.io) {
             try {
                 preferences.geminiApiKey.first()
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 ""
             }
         }
@@ -320,7 +320,7 @@ class LiveCommentatorManager(
             try {
                 val configuredModel = preferences.selectedLiveModel.first()
                 if (configuredModel.isNotBlank()) configuredModel else "gemini-2.5-flash-native-audio-dialog"
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 "gemini-2.5-flash-native-audio-dialog"
             }
         }
@@ -331,7 +331,7 @@ class LiveCommentatorManager(
             try {
                 val voice = preferences.commentaryVoice.first()
                 if (voice.isNotBlank()) voice else "Puck"
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 "Puck"
             }
         }
