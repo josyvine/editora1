@@ -1,5 +1,7 @@
 package com.vineyard.aivideostudio.ui.screens.editor
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -19,12 +21,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ClosedCaption
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Timeline
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -42,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -67,9 +75,19 @@ fun EditorScreen(
     viewModel: EditorViewModel,
     onNavigateBack: () -> Unit
 ) {
+    val context = LocalContext.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val project = state.project
     var selectedTab by remember { mutableIntStateOf(0) }
+
+    // Launcher for Storage Access Framework custom directory selection
+    val treePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { treeUri ->
+        if (treeUri != null) {
+            viewModel.exportToCustomTree(context, treeUri)
+        }
+    }
 
     // Locate active commentary soundtrack if available
     val activeCommentaryUri = state.commentary.firstOrNull { !it.audioArtifactUri.isNullOrBlank() }?.audioArtifactUri
@@ -105,7 +123,153 @@ fun EditorScreen(
                 )
             }
 
-            // 2. Copyright & Audio Replacement Security Card
+            // 2. Export & Save Local Video Action Card
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = StudioSurfaceElevated),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = "Export & Save Video",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextPrimary
+                                )
+                                Text(
+                                    text = "Save transformed MP4 to device gallery or custom folder",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextSecondary
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            // Button 1: Save directly to Public Gallery (Movies/Editora)
+                            Button(
+                                onClick = { viewModel.exportToGallery(context) },
+                                enabled = !state.isExporting,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(46.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = VioletPrimary),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                if (state.isExporting) {
+                                    CircularProgressIndicator(
+                                        color = Color.White,
+                                        modifier = Modifier.size(18.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Filled.Download,
+                                        contentDescription = "Save to Gallery",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Save to Gallery",
+                                        color = Color.White,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            // Button 2: Choose Custom Directory via SAF
+                            Button(
+                                onClick = { treePickerLauncher.launch(null) },
+                                enabled = !state.isExporting,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(46.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = StudioSurface),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Folder,
+                                    contentDescription = "Select Folder",
+                                    tint = VioletAccent,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Select Folder",
+                                    color = TextPrimary,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+
+                        // Success Feedback Banner
+                        if (state.exportSuccessMessage != null) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(EmeraldSuccess.copy(alpha = 0.15f))
+                                    .border(1.dp, EmeraldSuccess.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
+                                    .padding(horizontal = 10.dp, vertical = 8.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Icons.Filled.CheckCircle,
+                                        contentDescription = null,
+                                        tint = EmeraldSuccess,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = state.exportSuccessMessage!!,
+                                        color = EmeraldSuccess,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
+                        }
+
+                        // Error Feedback Banner
+                        if (state.exportErrorMessage != null) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(RoseError.copy(alpha = 0.15f))
+                                    .border(1.dp, RoseError.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
+                                    .padding(horizontal = 10.dp, vertical = 8.dp)
+                            ) {
+                                Text(
+                                    text = state.exportErrorMessage!!,
+                                    color = RoseError,
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 3. Copyright & Audio Replacement Security Card
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -160,7 +324,7 @@ fun EditorScreen(
                 }
             }
 
-            // 3. Navigation Tabs: Timeline, Captions, Commentary, QA History
+            // 4. Navigation Tabs: Timeline, Captions, Commentary, QA History
             item {
                 TabRow(
                     selectedTabIndex = selectedTab,
@@ -195,7 +359,7 @@ fun EditorScreen(
                 }
             }
 
-            // 4. Tab Content Panels
+            // 5. Tab Content Panels
             when (selectedTab) {
                 0 -> {
                     // Timeline Segments Panel
