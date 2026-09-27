@@ -240,12 +240,12 @@ fun EditorScreen(
                                 ) {
                                     Column {
                                         Text(
-                                            text = "Cut Segment #${index + 1}",
+                                            text = "Segment #${index + 1} (${seg.stageApplied.name})",
                                             style = MaterialTheme.typography.titleMedium,
                                             color = TextPrimary
                                         )
                                         Text(
-                                            text = "Source: ${TimeUtils.formatDuration(seg.sourceStart)} → ${TimeUtils.formatDuration(seg.sourceEnd)}",
+                                            text = "Original: ${TimeUtils.formatDuration(seg.originalStart)} → ${TimeUtils.formatDuration(seg.originalEnd)}",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = TextSecondary
                                         )
@@ -257,7 +257,7 @@ fun EditorScreen(
                                             .padding(horizontal = 8.dp, vertical = 4.dp)
                                     ) {
                                         Text(
-                                            text = "${TimeUtils.formatDuration(seg.outputStart)} - ${TimeUtils.formatDuration(seg.outputEnd)}",
+                                            text = "${TimeUtils.formatDuration(seg.currentStart)} - ${TimeUtils.formatDuration(seg.currentEnd)}",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = VioletAccent,
                                             fontWeight = FontWeight.Bold
@@ -296,8 +296,6 @@ fun EditorScreen(
                     } else {
                         items(state.captions.size) { idx ->
                             val cap = state.captions[idx]
-                            val startSec = cap.startMs / 1000.0
-                            val endSec = cap.endMs / 1000.0
 
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
@@ -311,13 +309,13 @@ fun EditorScreen(
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
                                         Text(
-                                            text = "${TimeUtils.formatDuration(startSec)} → ${TimeUtils.formatDuration(endSec)}",
+                                            text = "${TimeUtils.formatDuration(cap.start)} → ${TimeUtils.formatDuration(cap.end)}",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = AmberAccent,
                                             fontWeight = FontWeight.Bold
                                         )
                                         Text(
-                                            text = "Pos (${(cap.positionX * 100).toInt()}%, ${(cap.positionY * 100).toInt()}%)",
+                                            text = "Pos (${(cap.x * 100).toInt()}%, ${(cap.y * 100).toInt()}%)",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = TextTertiary
                                         )
