@@ -53,9 +53,10 @@ fun VideoPreviewPlayer(
     val isOriginalAudioMuted by previewPlayer.isOriginalAudioMuted.collectAsState()
     val hasCommentaryTrack by previewPlayer.hasCommentaryTrack.collectAsState()
 
-    // Locate active caption for current playback timestamp
+    // Match playback timestamp (in seconds) to caption start/end (Double)
+    val currentPositionSec = currentPositionMs / 1000.0
     val activeCaption = remember(currentPositionMs, captions) {
-        captions.firstOrNull { currentPositionMs in it.startMs..it.endMs }
+        captions.firstOrNull { currentPositionSec >= it.start && currentPositionSec <= it.end }
     }
 
     Box(
@@ -115,16 +116,16 @@ fun VideoPreviewPlayer(
 
         // 3. Real-Time Subtitle Overlay Layer
         if (activeCaption != null && activeCaption.text.isNotBlank()) {
-            val posX = if (activeCaption.positionX > 1.0f) activeCaption.positionX / 100f else activeCaption.positionX
-            val posY = if (activeCaption.positionY > 1.0f) activeCaption.positionY / 100f else activeCaption.positionY
+            val posX = if (activeCaption.x > 1.0f) activeCaption.x / 100f else activeCaption.x
+            val posY = if (activeCaption.y > 1.0f) activeCaption.y / 100f else activeCaption.y
 
             // Convert [0, 1] normalized space to Compose BiasAlignment [-1, 1]
             val biasX = ((posX.coerceIn(0.1f, 0.9f) * 2f) - 1f)
             val biasY = ((posY.coerceIn(0.1f, 0.95f) * 2f) - 1f)
 
-            val parsedTextColor = remember(activeCaption.fontColor) {
+            val parsedTextColor = remember(activeCaption.fontColorHex) {
                 try {
-                    Color(android.graphics.Color.parseColor(activeCaption.fontColor))
+                    Color(android.graphics.Color.parseColor(activeCaption.fontColorHex))
                 } catch (_: Exception) {
                     Color.White
                 }
