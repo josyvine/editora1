@@ -125,8 +125,8 @@ class Media3TransformerEngine(private val context: Context) {
      * Comprehensive final export pass:
      * 1. Strips copyrighted source audio track.
      * 2. Injects the replacement commentary audio file (M4A/AAC) as primary soundtrack.
-     * 3. Burns subtitle captions directly into the video frames.
-     * 4. Applies target aspect ratio reframing and optional zoom punch-in.
+     * 3. Burns subtitle captions directly into the video frames with intelligent subtitle masking.
+     * 4. Applies target aspect ratio reframing and noticeable zoom punch-in.
      */
     suspend fun exportVideo(
         inputUri: Uri,
@@ -149,7 +149,7 @@ class Media3TransformerEngine(private val context: Context) {
             else -> {} // Keep original aspect ratio
         }
 
-        // 2. Zoom Punch-In Effect (if scale factor is specified)
+        // 2. Pronounced Zoom Punch-In Effect (noticeable 1.25x – 1.35x scaling)
         if (zoomScale > 1.0f) {
             videoEffects.add(
                 ScaleAndRotateTransformation.Builder()
@@ -158,7 +158,7 @@ class Media3TransformerEngine(private val context: Context) {
             )
         }
 
-        // 3. Caption Burn-In Overlay Effect
+        // 3. Caption Burn-In with Intelligent Opaque Subtitle Masking
         if (captions.isNotEmpty()) {
             val captionOverlay: TextureOverlay = SubtitleBitmapOverlay(captions)
             videoEffects.add(OverlayEffect(ImmutableList.of(captionOverlay)))
@@ -252,7 +252,8 @@ class Media3TransformerEngine(private val context: Context) {
     }
 
     /**
-     * Dynamic BitmapOverlay that renders synchronized subtitles directly onto video frames.
+     * Dynamic BitmapOverlay that renders synchronized subtitles while intelligently masking
+     * and concealing original hardcoded subtitles present in the source video.
      */
     private class SubtitleBitmapOverlay(
         private val captions: List<Caption>,
@@ -293,9 +294,9 @@ class Media3TransformerEngine(private val context: Context) {
                 val y = targetHeight * posY.coerceIn(0.1f, 0.95f)
 
                 val scaledFontSize = if (activeCaption.fontSizeSp > 0f) {
-                    activeCaption.fontSizeSp * (targetWidth / 480f)
+                    activeCaption.fontSizeSp * (targetWidth / 460f)
                 } else {
-                    56f
+                    58f
                 }
 
                 textPaint.textSize = scaledFontSize
@@ -312,27 +313,39 @@ class Media3TransformerEngine(private val context: Context) {
                     textPaint.color = Color.WHITE
                 }
 
-                // Render background highlight box if configured (null-safe smart cast)
-                val bgHex = activeCaption.backgroundColorHex
-                if (!bgHex.isNullOrBlank() && bgHex != "#00000000") {
-                    try {
-                        backgroundPillPaint.color = Color.parseColor(bgHex)
-                        val textWidth = textPaint.measureText(activeCaption.text)
-                        val padH = 28f
-                        val padV = 16f
-                        val pillRect = RectF(
-                            x - (textWidth / 2f) - padH,
-                            y - scaledFontSize - padV,
-                            x + (textWidth / 2f) + padH,
-                            y + padV
-                        )
-                        canvas.drawRoundRect(pillRect, 20f, 20f, backgroundPillPaint)
-                    } catch (_: Exception) {}
-                }
+                // 1. INTELLIGENT ORIGINAL SUBTITLE MASKING
+                // Measures text width and enforces a generous minimum width (at least 75% of screen width)
+                // so the solid opaque pill completely covers longer original sentences underneath.
+                val textWidth = textPaint.measureText(activeCaption.text)
+                val padH = 32f
+                val padV = 18f
+                val minConcealerWidth = targetWidth * 0.78f // Covers full lower-third subtitle area
+                val maskWidth = maxOf(textWidth + (padH * 2), minConcealerWidth)
 
-                // Draw solid black stroke for high-contrast visibility on any video background
+                val pillRect = RectF(
+                    x - (maskWidth / 2f),
+                    y - scaledFontSize - padV,
+                    x + (maskWidth / 2f),
+                    y + padV
+                )
+
+                // Render solid 100% opaque mask to conceal original hardcoded text
+                val bgHex = activeCaption.backgroundColorHex
+                backgroundPillPaint.color = try {
+                    if (!bgHex.isNullOrBlank() && bgHex != "#00000000") {
+                        Color.parseColor(bgHex)
+                    } else {
+                        Color.BLACK // Solid black cover ensures total concealment
+                    }
+                } catch (_: Exception) {
+                    Color.BLACK
+                }
+                backgroundPillPaint.alpha = 255 // Strictly 100% opaque
+
+                canvas.drawRoundRect(pillRect, 22f, 22f, backgroundPillPaint)
+
+                // 2. Draw black stroke and text directly on top of the opaque mask
                 canvas.drawText(activeCaption.text, x, y, strokePaint)
-                // Draw main text
                 canvas.drawText(activeCaption.text, x, y, textPaint)
             }
 
