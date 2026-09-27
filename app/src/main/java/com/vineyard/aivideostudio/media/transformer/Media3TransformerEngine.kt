@@ -15,6 +15,7 @@ import androidx.media3.effect.Crop
 import androidx.media3.effect.OverlayEffect
 import androidx.media3.effect.Presentation
 import androidx.media3.effect.ScaleAndRotateTransformation
+import androidx.media3.effect.TextureOverlay
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.EditedMediaItemSequence
@@ -159,7 +160,7 @@ class Media3TransformerEngine(private val context: Context) {
 
         // 3. Caption Burn-In Overlay Effect
         if (captions.isNotEmpty()) {
-            val captionOverlay = SubtitleBitmapOverlay(captions)
+            val captionOverlay: TextureOverlay = SubtitleBitmapOverlay(captions)
             videoEffects.add(OverlayEffect(ImmutableList.of(captionOverlay)))
         }
 
@@ -280,19 +281,19 @@ class Media3TransformerEngine(private val context: Context) {
         private val canvas: Canvas = Canvas(frameBitmap)
 
         override fun getBitmap(presentationTimeUs: Long): Bitmap {
-            val currentMs = presentationTimeUs / 1000L
+            val currentSec = presentationTimeUs / 1_000_000.0
             frameBitmap.eraseColor(Color.TRANSPARENT)
 
-            val activeCaption = captions.firstOrNull { currentMs in it.startMs..it.endMs }
+            val activeCaption = captions.firstOrNull { currentSec >= it.start && currentSec <= it.end }
             if (activeCaption != null && activeCaption.text.isNotBlank()) {
-                val posX = if (activeCaption.positionX > 1.0f) activeCaption.positionX / 100f else activeCaption.positionX
-                val posY = if (activeCaption.positionY > 1.0f) activeCaption.positionY / 100f else activeCaption.positionY
+                val posX = if (activeCaption.x > 1.0f) activeCaption.x / 100f else activeCaption.x
+                val posY = if (activeCaption.y > 1.0f) activeCaption.y / 100f else activeCaption.y
 
                 val x = targetWidth * posX.coerceIn(0.05f, 0.95f)
                 val y = targetHeight * posY.coerceIn(0.1f, 0.95f)
 
-                val scaledFontSize = if (activeCaption.fontSize > 0f) {
-                    activeCaption.fontSize * (targetWidth / 480f)
+                val scaledFontSize = if (activeCaption.fontSizeSp > 0f) {
+                    activeCaption.fontSizeSp * (targetWidth / 480f)
                 } else {
                     56f
                 }
@@ -301,15 +302,15 @@ class Media3TransformerEngine(private val context: Context) {
                 strokePaint.textSize = scaledFontSize
 
                 try {
-                    textPaint.color = Color.parseColor(activeCaption.fontColor)
+                    textPaint.color = Color.parseColor(activeCaption.fontColorHex)
                 } catch (_: Exception) {
                     textPaint.color = Color.WHITE
                 }
 
                 // Render background highlight box if configured
-                if (activeCaption.backgroundColor.isNotBlank() && activeCaption.backgroundColor != "#00000000") {
+                if (activeCaption.backgroundColorHex.isNotBlank() && activeCaption.backgroundColorHex != "#00000000") {
                     try {
-                        backgroundPillPaint.color = Color.parseColor(activeCaption.backgroundColor)
+                        backgroundPillPaint.color = Color.parseColor(activeCaption.backgroundColorHex)
                         val textWidth = textPaint.measureText(activeCaption.text)
                         val padH = 28f
                         val padV = 16f
