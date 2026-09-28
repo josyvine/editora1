@@ -38,7 +38,8 @@ data class CreateUiState(
     val isShortsFormat: Boolean
         get() {
             val isVertical = (videoMetadata?.height ?: 0) > (videoMetadata?.width ?: 0)
-            val isShortsUrl = youtubeUrl.lowercase().contains("/shorts/")
+            val lowerUrl = youtubeUrl.lowercase()
+            val isShortsUrl = lowerUrl.contains("/shorts/") || lowerUrl.contains("/reel/") || lowerUrl.contains("/tiktok/")
             return isVertical || isShortsUrl
         }
 
@@ -46,21 +47,16 @@ data class CreateUiState(
         get() = selectedVideoUri != null && isYoutubeUrlValid && !isLoading
 
     companion object {
+        /**
+         * Validates that the provided reference URL is a valid public web video URL.
+         * Supports any public domain (YouTube, Vimeo, example.com, custom streaming hosts).
+         */
         fun isValidYoutubeUrl(url: String): Boolean {
             val trimmed = url.trim().lowercase()
             if (trimmed.isEmpty()) return false
-            val isYoutubeDomain = trimmed.startsWith("https://www.youtube.com/") ||
-                    trimmed.startsWith("http://www.youtube.com/") ||
-                    trimmed.startsWith("https://youtube.com/") ||
-                    trimmed.startsWith("http://youtube.com/") ||
-                    trimmed.startsWith("https://youtu.be/") ||
-                    trimmed.startsWith("http://youtu.be/") ||
-                    trimmed.startsWith("https://m.youtube.com/")
-            val hasVideoIdentifier = trimmed.contains("v=") ||
-                    trimmed.contains("youtu.be/") ||
-                    trimmed.contains("/shorts/") ||
-                    trimmed.contains("/live/")
-            return isYoutubeDomain && hasVideoIdentifier
+            val isHttp = trimmed.startsWith("http://") || trimmed.startsWith("https://")
+            val hasValidDomain = trimmed.contains(".") && trimmed.length > 8
+            return isHttp && hasValidDomain
         }
     }
 }
@@ -118,7 +114,7 @@ class CreateViewModel(
     fun createProject() {
         val state = _uiState.value
 
-        // Mandatory validation 1: Downloaded video file must be provided
+        // Mandatory validation 1: Source video file must be provided
         if (state.selectedVideoUri == null) {
             _uiState.value = state.copy(
                 errorMessage = "Please select the source video file from your device (Shorts or Long-Form)."
@@ -126,10 +122,10 @@ class CreateViewModel(
             return
         }
 
-        // Mandatory validation 2: YouTube reference link must be valid
+        // Mandatory validation 2: Source context link must be valid
         if (state.youtubeUrl.isBlank() || !state.isYoutubeUrlValid) {
             _uiState.value = state.copy(
-                errorMessage = "Please provide the valid source YouTube URL (e.g. https://youtube.com/shorts/... or https://youtube.com/watch?v=...)."
+                errorMessage = "Please provide a valid source context URL (e.g. https://example.com/video/... or a public video link)."
             )
             return
         }
