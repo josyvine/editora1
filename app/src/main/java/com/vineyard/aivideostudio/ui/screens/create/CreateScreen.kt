@@ -121,7 +121,7 @@ fun CreateScreen(
                     value = state.projectName,
                     onValueChange = { viewModel.onProjectNameChanged(it) },
                     label = { Text("Project Title") },
-                    placeholder = { Text("e.g. Kyrie Irving Meme Commentary Edit") },
+                    placeholder = { Text("e.g. Playmaking Highlights Commentary Edit") },
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("create_project_name_input"),
@@ -340,7 +340,7 @@ fun CreateScreen(
                                         color = TextPrimary
                                     )
                                     Text(
-                                        text = "Supports MP4, MOV, MKV files downloaded from YouTube",
+                                        text = "Supports MP4, MOV, MKV video files",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = TextSecondary
                                     )
@@ -351,7 +351,7 @@ fun CreateScreen(
                 }
             }
 
-            // STEP 2: Source YouTube Reference URL
+            // STEP 2: Source Context Reference URL
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -382,7 +382,7 @@ fun CreateScreen(
                             Column(modifier = Modifier.weight(1f)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
-                                        text = "Source YouTube URL",
+                                        text = "Source Context URL",
                                         style = MaterialTheme.typography.titleSmall,
                                         fontWeight = FontWeight.Bold,
                                         color = TextPrimary
@@ -396,7 +396,7 @@ fun CreateScreen(
                                     )
                                 }
                                 Text(
-                                    text = "Gemini analyzes this reference URL for scene context and scriptwriting",
+                                    text = "Gemini analyzes this reference URL for scene context, dialogue & scriptwriting",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = TextSecondary
                                 )
@@ -416,8 +416,8 @@ fun CreateScreen(
                         OutlinedTextField(
                             value = state.youtubeUrl,
                             onValueChange = { viewModel.onYoutubeUrlChanged(it) },
-                            label = { Text("Public YouTube Source URL") },
-                            placeholder = { Text("https://youtube.com/shorts/... or https://youtube.com/watch?v=...") },
+                            label = { Text("Public Source Context URL") },
+                            placeholder = { Text("https://example.com/shorts/... or https://example.com/watch?v=...") },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag("create_youtube_url_input"),
@@ -465,7 +465,7 @@ fun CreateScreen(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "Valid YouTube URL linked for Gemini semantic analysis",
+                                    text = "Valid source reference URL linked for Gemini semantic analysis",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = EmeraldSuccess
                                 )
@@ -478,7 +478,7 @@ fun CreateScreen(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "Supports standard YouTube and Shorts URLs",
+                                    text = "Enter a valid video reference link (e.g. https://example.com/...)",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = AmberAccent
                                 )
@@ -491,7 +491,7 @@ fun CreateScreen(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "Paste the URL of the YouTube video downloaded above",
+                                    text = "Paste the reference URL of the downloaded video above",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = TextTertiary
                                 )
@@ -586,9 +586,9 @@ fun CreateScreen(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = if (state.isYoutubeUrlValid) {
-                                    "YouTube Context: Linked for AI reasoning"
+                                    "Source Context: Linked for AI reasoning"
                                 } else {
-                                    "YouTube Context: Required (Paste YouTube link)"
+                                    "Source Context: Required (Paste video reference link)"
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = if (state.isYoutubeUrlValid) TextPrimary else TextSecondary
@@ -659,7 +659,7 @@ fun CreateScreen(
                 if (!state.isReadyToCreate && !state.isLoading) {
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Add both local video and source YouTube URL to start automated production.",
+                        text = "Add both local video and source context URL to start automated production.",
                         style = MaterialTheme.typography.labelSmall,
                         color = TextTertiary,
                         modifier = Modifier.padding(horizontal = 4.dp)
