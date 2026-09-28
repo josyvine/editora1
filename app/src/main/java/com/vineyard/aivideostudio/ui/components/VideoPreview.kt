@@ -117,11 +117,16 @@ fun VideoPreviewPlayer(
         // 3. Real-Time Subtitle Overlay Layer with Intelligent Concealer Mask
         if (activeCaption != null && activeCaption.text.isNotBlank()) {
             val posX = if (activeCaption.x > 1.0f) activeCaption.x / 100f else activeCaption.x
-            val posY = if (activeCaption.y > 1.0f) activeCaption.y / 100f else activeCaption.y
+
+            // Lower-third subtitle anchoring:
+            // Native subtitles sit between 0.88 and 0.93.
+            // Anchoring lower-third captions directly to 0.90f ensures the concealer mask blankets the original text precisely.
+            val rawY = if (activeCaption.y > 1.0f) activeCaption.y / 100f else activeCaption.y
+            val targetY = if (rawY in 0.75f..0.96f) 0.90f else rawY
 
             // Convert [0, 1] normalized space to Compose BiasAlignment [-1, 1]
             val biasX = ((posX.coerceIn(0.1f, 0.9f) * 2f) - 1f)
-            val biasY = ((posY.coerceIn(0.1f, 0.95f) * 2f) - 1f)
+            val biasY = ((targetY.coerceIn(0.1f, 0.95f) * 2f) - 1f)
 
             val parsedTextColor = remember(activeCaption.fontColorHex) {
                 val hex = activeCaption.fontColorHex
@@ -153,17 +158,17 @@ fun VideoPreviewPlayer(
                 modifier = Modifier
                     .fillMaxSize()
                     .align(BiasAlignment(biasX, biasY))
-                    .padding(horizontal = 16.dp, vertical = 20.dp),
+                    .padding(horizontal = 12.dp, vertical = 12.dp),
                 contentAlignment = BiasAlignment(biasX, biasY)
             ) {
-                // Intelligent Concealer Box: Spans 82% of player width so underlying subtitles never peek out
+                // Intelligent Concealer Box: Spans 85% of player width so underlying subtitles never peek out
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth(0.82f)
-                        .clip(RoundedCornerShape(10.dp))
+                        .fillMaxWidth(0.85f)
+                        .clip(RoundedCornerShape(8.dp))
                         .background(parsedBgColor)
-                        .border(1.5.dp, Color(0x66FFFFFF), RoundedCornerShape(10.dp))
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                        .border(1.5.dp, Color(0x66FFFFFF), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 14.dp, vertical = 6.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
