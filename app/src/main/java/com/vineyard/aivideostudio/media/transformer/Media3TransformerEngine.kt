@@ -158,7 +158,7 @@ class Media3TransformerEngine(private val context: Context) {
             )
         }
 
-        // 3. Caption Burn-In with Intelligent Opaque Subtitle Concealing
+        // 3. Caption Burn-In with Multiline Wrapping and Concealer Masking
         if (captions.isNotEmpty()) {
             val captionOverlay: TextureOverlay = SubtitleBitmapOverlay(captions)
             videoEffects.add(OverlayEffect(ImmutableList.of(captionOverlay)))
@@ -252,7 +252,7 @@ class Media3TransformerEngine(private val context: Context) {
     }
 
     /**
-     * Dynamic BitmapOverlay that renders synchronized subtitles while seamlessly concealing
+     * Dynamic BitmapOverlay that renders synchronized multiline subtitles while seamlessly concealing
      * original hardcoded subtitles located in the lower-third zone.
      */
     private class SubtitleBitmapOverlay(
@@ -299,9 +299,9 @@ class Media3TransformerEngine(private val context: Context) {
                 val y = targetHeight * targetY.coerceIn(0.1f, 0.95f)
 
                 val scaledFontSize = if (activeCaption.fontSizeSp > 0f) {
-                    activeCaption.fontSizeSp * (targetWidth / 460f)
+                    activeCaption.fontSizeSp * (targetWidth / 480f)
                 } else {
-                    58f
+                    54f
                 }
 
                 textPaint.textSize = scaledFontSize
@@ -318,20 +318,45 @@ class Media3TransformerEngine(private val context: Context) {
                     textPaint.color = Color.WHITE
                 }
 
-                // 1. INTELLIGENT ORIGINAL SUBTITLE MASKING
-                // Measures text width and enforces a solid opaque concealer footprint spanning 80% of width
-                // so original white/yellow captions underneath are completely blanketed and hidden.
-                val textWidth = textPaint.measureText(activeCaption.text)
-                val padH = 32f
-                val padV = 18f
-                val minConcealerWidth = targetWidth * 0.80f
-                val maskWidth = maxOf(textWidth + (padH * 2), minConcealerWidth)
+                // 1. DYNAMIC MULTILINE SENTENCE WRAPPING
+                val maxTextWidth = targetWidth * 0.76f
+                val words = activeCaption.text.split(" ")
+                val lines = mutableListOf<String>()
+                var currentLine = StringBuilder()
+
+                for (word in words) {
+                    val testLine = if (currentLine.isEmpty()) word else "$currentLine $word"
+                    if (textPaint.measureText(testLine) <= maxTextWidth) {
+                        currentLine = StringBuilder(testLine)
+                    } else {
+                        if (currentLine.isNotEmpty()) {
+                            lines.add(currentLine.toString())
+                        }
+                        currentLine = StringBuilder(word)
+                    }
+                }
+                if (currentLine.isNotEmpty()) {
+                    lines.add(currentLine.toString())
+                }
+                if (lines.isEmpty()) {
+                    lines.add(activeCaption.text)
+                }
+
+                val lineHeight = scaledFontSize * 1.25f
+                val totalTextHeight = lines.size * lineHeight
+                val longestLineWidth = lines.maxOfOrNull { textPaint.measureText(it) } ?: maxTextWidth
+
+                // 2. INTELLIGENT ORIGINAL SUBTITLE CONCEALER MASK
+                val padH = 36f
+                val padV = 20f
+                val minConcealerWidth = targetWidth * 0.82f // Blankets the full lower-third subtitle area
+                val maskWidth = maxOf(longestLineWidth + (padH * 2), minConcealerWidth)
 
                 val pillRect = RectF(
                     x - (maskWidth / 2f),
-                    y - scaledFontSize - padV,
+                    y - (totalTextHeight / 2f) - padV,
                     x + (maskWidth / 2f),
-                    y + padV
+                    y + (totalTextHeight / 2f) + padV
                 )
 
                 // Render solid 100% opaque mask to conceal original hardcoded text
@@ -349,9 +374,13 @@ class Media3TransformerEngine(private val context: Context) {
 
                 canvas.drawRoundRect(pillRect, 22f, 22f, backgroundPillPaint)
 
-                // 2. Draw black stroke and text directly on top of the opaque mask
-                canvas.drawText(activeCaption.text, x, y, strokePaint)
-                canvas.drawText(activeCaption.text, x, y, textPaint)
+                // 3. Draw each line centered over the opaque mask
+                val startY = y - (totalTextHeight / 2f) + scaledFontSize * 0.85f
+                for ((lineIdx, lineText) in lines.withIndex()) {
+                    val lineY = startY + (lineIdx * lineHeight)
+                    canvas.drawText(lineText, x, lineY, strokePaint)
+                    canvas.drawText(lineText, x, lineY, textPaint)
+                }
             }
 
             return frameBitmap
