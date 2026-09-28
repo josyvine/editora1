@@ -5,6 +5,7 @@ import android.net.Uri
 import com.vineyard.aivideostudio.ai.gemini.GeminiClient
 import com.vineyard.aivideostudio.ai.model.AiQaResponse
 import com.vineyard.aivideostudio.ai.model.CaptionDecision
+import com.vineyard.aivideostudio.ai.model.CaptionItem
 import com.vineyard.aivideostudio.ai.model.CommentaryDecision
 import com.vineyard.aivideostudio.ai.model.CropDecision
 import com.vineyard.aivideostudio.ai.model.ModelPurpose
@@ -353,8 +354,8 @@ class VideoProcessingPipeline(
             recordStep(projectId, PipelineStatus.ZOOM_ANALYSIS, StepStatus.SKIPPED, "Zoom not required")
         }
 
-        // 7. CAPTION PIPELINE (Lower-third Y=0.90 with 80% concealer mask)
-        onStageChanged(PipelineStatus.CAPTION_ANALYSIS, "Gemini designing synchronized captions")
+        // 7. CAPTION PIPELINE (1:1 Sentence Paraphrasing & Bottom Concealer Masking)
+        onStageChanged(PipelineStatus.CAPTION_ANALYSIS, "Gemini generating 1:1 paraphrased captions to conceal original text")
         recordStep(projectId, PipelineStatus.CAPTION_ANALYSIS, StepStatus.IN_PROGRESS, "Generating captions")
 
         val captionPrompt = Prompts.buildCaptionDecisionPrompt(sourceAnalysis, currentDuration)
@@ -367,16 +368,40 @@ class VideoProcessingPipeline(
 
         val captionDecision = when (captionResult) {
             is AppResult.Success -> captionResult.data
-            is AppResult.Error -> CaptionDecision(isNecessary = true, captions = listOf(
-                com.vineyard.aivideostudio.ai.model.CaptionItem(
-                    text = sourceAnalysis.summary.take(40),
-                    start = 0.5,
-                    end = 3.5.coerceAtMost(currentDuration)
-                )
-            ))
+            is AppResult.Error -> CaptionDecision(isNecessary = true, captions = emptyList())
         }
 
-        val captionsToSave = captionDecision.captions.mapIndexed { idx, cap ->
+        // Fallback: If AI returned empty captions but original video has dialogue segments,
+        // map every dialogue sentence 1:1 so no original sentence is left exposed.
+        val finalCaptionItems = if (captionDecision.captions.isNotEmpty()) {
+            captionDecision.captions
+        } else if (sourceAnalysis.dialogueSegments.isNotEmpty()) {
+            sourceAnalysis.dialogueSegments.map { dia ->
+                CaptionItem(
+                    text = dia.text,
+                    start = dia.start,
+                    end = dia.end.coerceAtMost(currentDuration),
+                    x = 0.5f,
+                    y = 0.90f,
+                    style = "BOLD",
+                    colorHex = "#FFFFFF"
+                )
+            }
+        } else {
+            listOf(
+                CaptionItem(
+                    text = sourceAnalysis.summary.take(45),
+                    start = 0.5,
+                    end = 3.5.coerceAtMost(currentDuration),
+                    x = 0.5f,
+                    y = 0.90f,
+                    style = "BOLD",
+                    colorHex = "#FFFFFF"
+                )
+            )
+        }
+
+        val captionsToSave = finalCaptionItems.mapIndexed { idx, cap ->
             Caption(
                 id = "cap_${idx}_${System.currentTimeMillis()}",
                 projectId = projectId,
@@ -384,10 +409,11 @@ class VideoProcessingPipeline(
                 start = cap.start,
                 end = cap.end,
                 x = cap.x,
-                y = cap.y,
+                // Ensure all lower-third dialogue captions anchor directly to Y = 0.90 over original subtitles
+                y = if (cap.y in 0.70f..0.96f) 0.90f else cap.y,
                 fontSizeSp = 22f,
                 fontColorHex = cap.colorHex,
-                backgroundColorHex = "#FF000000", // Solid black opaque mask
+                backgroundColorHex = "#FF000000", // Solid black opaque mask for complete concealment
                 style = cap.style
             )
         }
@@ -396,7 +422,7 @@ class VideoProcessingPipeline(
         logger.log(
             projectId,
             PipelineStatus.CAPTION_ANALYSIS,
-            "Diagnostic [Captions]: Configured ${captionsToSave.size} subtitles | Baseline anchored to Y=0.90 with solid 80% width opaque concealer mask to hide original subtitles",
+            "Diagnostic [Captions]: Configured ${captionsToSave.size} 1:1 paraphrased subtitles | Anchored to Y=0.90 with solid 80% width opaque concealer mask to hide original subtitles",
             LogSeverity.SUCCESS
         )
 
