@@ -114,7 +114,7 @@ fun VideoPreviewPlayer(
             }
         }
 
-        // 3. Real-Time Subtitle Overlay Layer with Intelligent Concealer Mask
+        // 3. Real-Time Subtitle Overlay Layer with Multiline Concealer Mask
         if (activeCaption != null && activeCaption.text.isNotBlank()) {
             val posX = if (activeCaption.x > 1.0f) activeCaption.x / 100f else activeCaption.x
 
@@ -158,25 +158,28 @@ fun VideoPreviewPlayer(
                 modifier = Modifier
                     .fillMaxSize()
                     .align(BiasAlignment(biasX, biasY))
-                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
                 contentAlignment = BiasAlignment(biasX, biasY)
             ) {
-                // Intelligent Concealer Box: Spans 85% of player width so underlying subtitles never peek out
+                // Multiline Concealer Box: Spans 85% of player width so underlying subtitles never peek out
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(0.85f)
                         .clip(RoundedCornerShape(8.dp))
                         .background(parsedBgColor)
                         .border(1.5.dp, Color(0x66FFFFFF), RoundedCornerShape(8.dp))
-                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = activeCaption.text.uppercase(),
+                        text = activeCaption.text,
                         color = parsedTextColor,
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Black,
-                        textAlign = TextAlign.Center
+                        fontSize = 15.sp,
+                        lineHeight = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                        maxLines = 3,
+                        softWrap = true
                     )
                 }
             }
