@@ -52,8 +52,8 @@
 
     /**
      * Entry Point: Called by Android Kotlin via evaluateJavascript to start commentary generation.
-     * @param scriptText The commentary script containing emotional cue tags (e.g. [SCREAMING], [HYPE]).
-     * @param personaPrompt The director persona instructions.
+     * @param scriptText The commentary script containing emotional cue tags (e.g. [SCREAMING], [SHOUTING], [MOANING IN DISBELIEF]).
+     * @param personaPrompt The genre-conditioned director persona instructions.
      */
     window.startCommentarySession = function(scriptText, personaPrompt) {
       logDiagnostic("startCommentarySession invoked by native engine.", "LIFECYCLE");
@@ -106,7 +106,7 @@
           modelId = modelId.replace("models/", "");
         }
         if (!modelId || modelId.trim() === "") {
-          modelId = "gemini-2.5-flash-native-audio-dialog";
+          modelId = "gemini-3.8-live";
         }
 
         const endpointUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${apiKey}`;
@@ -119,10 +119,14 @@
 
           let effectiveSystemInstruction = pendingPersonaPrompt;
           if (!effectiveSystemInstruction || effectiveSystemInstruction.trim() === "") {
-            effectiveSystemInstruction = "You are an unhinged, high-octane viral sports and meme commentator. " +
-              "You narrate the provided video script with extreme emotion, screaming at unbelievable highlights, " +
-              "gasping at shock moments, moaning in disbelief, and delivering explosive energy. " +
-              "Act and vocalize all bracketed stage directions like [SCREAMING], [LOUD HYPE], [SHOCKED GASP] with your real voice.";
+            effectiveSystemInstruction = "You are an electrifying, loud, unhinged live sports and viral video commentator. " +
+              "The original audio is completely purged. You MUST scream, shout, moan in disbelief, and deliver explosive hype for highlights! " +
+              "You must strictly vocalize and act out all bracketed stage directions like [SCREAMING], [LOUD SHOUT], [MOANING IN DISBELIEF], [LOUD ROAR] " +
+              "with your real voice volume, breath, and pitch. Never read the bracketed tags aloud.";
+          } else {
+            effectiveSystemInstruction += " " +
+              "CRITICAL VOCAL DIRECTIVE: You must strictly act out and vocalize all bracketed emotional cues like [SCREAMING], [SHOUTING], [MOANING IN DISBELIEF], [LOUD ROAR] " +
+              "with your genuine voice volume and timbre. Do not read the bracketed cue tags aloud as words.";
           }
 
           const setupPayload = {
@@ -276,8 +280,9 @@
           turns: [{
             role: "user",
             parts: [{
-              text: "Here is the exact video commentary script you must voice act right now. " +
-                    "Perform it with extreme energy, real screaming, shouting, laughter, and high-octane commentary without any introductory filler or meta-talk. Start speaking the commentary immediately:\n\n" +
+              text: "Deliver this voiceover commentary performance immediately. " +
+                    "Act out all emotional cues: scream loudly, shout with full energy, moan in disbelief, and laugh naturally according to the bracketed directions. " +
+                    "Do NOT say 'Okay', 'Here is the commentary', or any greetings. Start the commentary performance immediately:\n\n" +
                     pendingScriptText
             }]
           }],
