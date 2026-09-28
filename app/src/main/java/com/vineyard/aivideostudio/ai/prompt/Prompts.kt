@@ -217,17 +217,21 @@ object Prompts {
         sourceAnalysis: SourceAnalysis,
         currentDuration: Double
     ): String = """
-        You are an elite subtitle director creating high-retention burned-in captions for this video.
+        You are an elite subtitle director responsible for replacing and concealing the original burned-in subtitles with derivative, transformative captions.
         
-        TIMELINE & CONTEXT:
-        - Duration: $currentDuration seconds
-        - Category: ${sourceAnalysis.category}
-        - Spoken Dialogue / Highlights: ${sourceAnalysis.dialogueSegments.joinToString { "[${it.start}-${it.end}] ${it.text}" }}
+        CRUCIAL MANDATE — 1:1 SENTENCE-BY-SENTENCE PARAPHRASING:
+        The original video contains hardcoded subtitles at the bottom of the screen. You MUST replace and cover every single original sentence by generating a derivative rewrite that communicates the EXACT SAME MEANING in fresh, copyright-safe words.
+        DO NOT generate generic 1-2 word buzzwords (like "DOMINATE", "LEVEL UP", "BEYOND LIMITS", or "PURE ENERGY").
+        
+        ORIGINAL SPOKEN DIALOGUE / SUBTITLES TO COVER:
+        ${sourceAnalysis.dialogueSegments.mapIndexed { i, d -> "Sentence ${i + 1} [${d.start}s - ${d.end}s]: \"${d.text}\"" }.joinToString("\n")}
         
         RULES:
-        1. Generate short, punchy, high-impact captions formatted for short-form retention (1 to 4 words per segment).
-        2. Timestamps MUST fall between 0.0 and $currentDuration seconds.
-        3. Use high-contrast colors (e.g. #FFD700 Gold, #00FFCC Cyan, #FFFFFF White).
+        1. 1:1 SENTENCE COVERAGE: For EVERY sentence in the dialogue segments above, generate a matching caption entry. If there are 5 original sentences, output 5 corresponding rewritten captions.
+        2. PARAPHRASING WITH SAME MEANING: Rewrite each original sentence using different words that convey the exact same meaning (e.g. if original is "He's an engine that's fully on to create", rewrite it to "His playmaking engine is always operating at full throttle").
+        3. EXACT BOTTOM POSITIONING: Always set "x": 0.5 and "y": 0.90 so the solid concealer mask sits directly over the original hardcoded subtitles at the bottom of the screen, covering them completely without a trace.
+        4. ACCURATE TIMING: Timestamps ("start" and "end") must span the exact duration that the original sentence is spoken/captioned on screen, constrained between 0.0 and $currentDuration seconds.
+        5. HIGH CONTRAST: Use clean, high-visibility colors (e.g. #FFFFFF White or #FFD700 Gold).
         
         OUTPUT FORMAT (STRICT JSON ONLY):
         {
@@ -235,28 +239,31 @@ object Prompts {
           "isNecessary": true,
           "captions": [
             {
-              "text": "LOOK AT THIS!",
+              "text": "His playmaking engine is always operating at full throttle.",
               "start": 0.0,
-              "end": ${currentDuration.coerceAtMost(2.5)},
+              "end": 3.2,
               "x": 0.5,
-              "y": 0.82,
+              "y": 0.90,
               "style": "BOLD",
-              "colorHex": "#FFD700"
+              "colorHex": "#FFFFFF"
             }
           ],
-          "explanation": "High retention synchronized subtitles"
+          "explanation": "1:1 sentence paraphrasing that accurately replaces and conceals all original burned-in subtitles"
         }
     """.trimIndent()
 
     fun buildCaptionQaPrompt(captionCount: Int): String = """
         Inspect the rendered captions ($captionCount caption segments).
-        Check: readability, timestamp synchronization, and visual clarity.
+        Check:
+        1. Does each caption rewrite the original dialogue sentence with the same meaning?
+        2. Are all captions anchored to the bottom subtitle area (Y ≈ 0.90) to ensure complete concealment of original subtitles?
+        3. Are timestamps accurate and synchronized?
         
         OUTPUT FORMAT (STRICT JSON ONLY):
         {
           "verdict": "PASS",
           "confidence": 0.98,
-          "feedback": "Captions are correctly timed, high contrast, and formatted for retention.",
+          "feedback": "All dialogue sentences are accurately paraphrased 1:1, properly timed, and positioned at Y=0.90 to conceal original subtitles.",
           "corrections": [],
           "criticalContentPreserved": true
         }
