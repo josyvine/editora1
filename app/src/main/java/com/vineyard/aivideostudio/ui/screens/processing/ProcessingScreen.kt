@@ -17,17 +17,17 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SmartDisplay
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -39,19 +39,21 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vineyard.aivideostudio.core.model.PipelineStatus
 import com.vineyard.aivideostudio.core.model.StepStatus
+import com.vineyard.aivideostudio.core.util.TimeUtils
 import com.vineyard.aivideostudio.ui.components.AppTopBar
 import com.vineyard.aivideostudio.ui.components.PipelineStepRow
 import com.vineyard.aivideostudio.ui.components.StatusChip
 import com.vineyard.aivideostudio.ui.components.VideoPreviewPlayer
 import com.vineyard.aivideostudio.ui.theme.AmberAccent
 import com.vineyard.aivideostudio.ui.theme.BorderSubtle
-import com.vineyard.aivideostudio.ui.theme.CyanInfo
 import com.vineyard.aivideostudio.ui.theme.EmeraldSuccess
 import com.vineyard.aivideostudio.ui.theme.RoseError
 import com.vineyard.aivideostudio.ui.theme.StudioCardBg
@@ -71,12 +73,13 @@ fun ProcessingScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val project = state.project
+    val isCompleted = project?.status == PipelineStatus.COMPLETED || state.currentStage == PipelineStatus.COMPLETED
 
     Scaffold(
         topBar = {
             AppTopBar(
                 title = project?.name ?: "Video Studio Processing",
-                subtitle = "State: ${state.currentStage.name}",
+                subtitle = if (isCompleted) "Production Complete — Ready to Export" else "State: ${state.currentStage.name}",
                 onNavigateBack = onNavigateBack
             )
         },
@@ -93,14 +96,14 @@ fun ProcessingScreen(
             item {
                 Spacer(modifier = Modifier.height(4.dp))
                 VideoPreviewPlayer(
-                    videoUriString = project?.currentVideoUri,
+                    videoUriString = project?.finalVideoUri ?: project?.currentVideoUri,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(200.dp)
                 )
             }
 
-            // Paired Source Summary Card (Local Video + Source YouTube)
+            // Paired Source Summary Card (Local Video + Source Context URL)
             if (project != null) {
                 item {
                     Card(
@@ -124,7 +127,7 @@ fun ProcessingScreen(
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "Local Video: ${project.metadata.width}x${project.metadata.height} • ${com.vineyard.aivideostudio.core.util.TimeUtils.formatDuration(project.metadata.durationSeconds)}",
+                                        text = "Local Video: ${project.metadata.width}x${project.metadata.height} • ${TimeUtils.formatDuration(project.metadata.durationSeconds)}",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = TextPrimary,
                                         fontWeight = FontWeight.Medium
@@ -150,7 +153,7 @@ fun ProcessingScreen(
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "Source YouTube: ${project.sourceYoutubeUrl}",
+                                        text = "Source Context URL: ${project.sourceYoutubeUrl}",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = TextSecondary,
                                         maxLines = 1
@@ -162,13 +165,16 @@ fun ProcessingScreen(
                 }
             }
 
-            // AI Status & Guidance Card
+            // AI Status & Guidance Card (Unmistakable Completion Banner)
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = StudioSurfaceElevated),
+                    colors = CardDefaults.cardColors(containerColor = if (isCompleted) StudioSurfaceElevated else StudioSurface),
                     shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, VioletPrimary.copy(alpha = 0.5f))
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (isCompleted) EmeraldSuccess.copy(alpha = 0.8f) else VioletPrimary.copy(alpha = 0.5f)
+                    )
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(
@@ -178,16 +184,16 @@ fun ProcessingScreen(
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
-                                    imageVector = Icons.Filled.AutoAwesome,
+                                    imageVector = if (isCompleted) Icons.Filled.CheckCircle else Icons.Filled.AutoAwesome,
                                     contentDescription = null,
-                                    tint = AmberAccent,
+                                    tint = if (isCompleted) EmeraldSuccess else AmberAccent,
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "GEMINI REASONING ENGINE",
+                                    text = if (isCompleted) "PRODUCTION COMPLETED & VERIFIED" else "GEMINI REASONING ENGINE",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = AmberAccent,
+                                    color = if (isCompleted) EmeraldSuccess else AmberAccent,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -198,7 +204,11 @@ fun ProcessingScreen(
 
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = state.aiMessage,
+                            text = if (isCompleted) {
+                                "Final video is fully transformed, original audio purged, live commentary attached, and subtitles burned in. Ready for export!"
+                            } else {
+                                state.aiMessage
+                            },
                             style = MaterialTheme.typography.bodyLarge,
                             color = TextPrimary,
                             fontWeight = FontWeight.Medium
@@ -224,7 +234,7 @@ fun ProcessingScreen(
                 }
             }
 
-            // Controls (Start / Cancel / Open Editor)
+            // Controls (Export / Start / Cancel)
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -244,6 +254,36 @@ fun ProcessingScreen(
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("Cancel", color = TextPrimary)
                         }
+                    } else if (isCompleted && project != null) {
+                        // Prominent Primary Action when completed: Open Editor & Save
+                        Button(
+                            onClick = { onOpenEditor(project.id) },
+                            modifier = Modifier
+                                .weight(1.3f)
+                                .height(48.dp)
+                                .testTag("processing_open_editor_button"),
+                            colors = ButtonDefaults.buttonColors(containerColor = EmeraldSuccess),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(Icons.Filled.Download, contentDescription = null, tint = Color.White)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Open Editor & Export", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+
+                        // Secondary Action: Re-Run only if needed
+                        OutlinedButton(
+                            onClick = { viewModel.startProcessing() },
+                            modifier = Modifier
+                                .weight(0.8f)
+                                .height(48.dp)
+                                .testTag("processing_start_button"),
+                            shape = RoundedCornerShape(10.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
+                        ) {
+                            Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Re-Run", color = TextSecondary, fontSize = 12.sp)
+                        }
                     } else {
                         Button(
                             onClick = { viewModel.startProcessing() },
@@ -256,26 +296,22 @@ fun ProcessingScreen(
                         ) {
                             Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = TextPrimary)
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                if (project?.status == PipelineStatus.COMPLETED) "Re-Run Pipeline" else "Start Pipeline",
-                                color = TextPrimary,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Text("Start Pipeline", color = TextPrimary, fontWeight = FontWeight.Bold)
                         }
-                    }
 
-                    if (project != null) {
-                        OutlinedButton(
-                            onClick = { onOpenEditor(project.id) },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(48.dp)
-                                .testTag("processing_open_editor_button"),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Icon(Icons.Filled.Edit, contentDescription = null, tint = TextPrimary)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Inspect Editor", color = TextPrimary)
+                        if (project != null) {
+                            OutlinedButton(
+                                onClick = { onOpenEditor(project.id) },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp)
+                                    .testTag("processing_open_editor_button"),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Icon(Icons.Filled.Edit, contentDescription = null, tint = TextPrimary)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Inspect Editor", color = TextPrimary)
+                            }
                         }
                     }
                 }
@@ -315,10 +351,10 @@ fun ProcessingScreen(
                         )
 
                         stages.forEach { (name, stage, detail) ->
-                            val isCompleted = isStagePassed(stage, project?.status ?: PipelineStatus.IDLE)
+                            val isStageCompleted = isStagePassed(stage, project?.status ?: PipelineStatus.IDLE)
                             val isCurrent = state.currentStage == stage
                             val stepStatus = when {
-                                isCompleted -> StepStatus.COMPLETED
+                                isStageCompleted -> StepStatus.COMPLETED
                                 isCurrent -> StepStatus.IN_PROGRESS
                                 else -> StepStatus.PENDING
                             }
