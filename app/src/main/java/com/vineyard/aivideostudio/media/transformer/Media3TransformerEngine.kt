@@ -125,7 +125,7 @@ class Media3TransformerEngine(private val context: Context) {
      * Comprehensive final export pass:
      * 1. Strips copyrighted source audio track.
      * 2. Injects the replacement commentary audio file (M4A/AAC) as primary soundtrack.
-     * 3. Burns subtitle captions directly into the video frames with intelligent subtitle masking.
+     * 3. Burns subtitle captions directly over original subtitles with seamless concealing.
      * 4. Applies target aspect ratio reframing and noticeable zoom punch-in.
      */
     suspend fun exportVideo(
@@ -158,7 +158,7 @@ class Media3TransformerEngine(private val context: Context) {
             )
         }
 
-        // 3. Caption Burn-In with Intelligent Opaque Subtitle Masking
+        // 3. Caption Burn-In with Intelligent Opaque Subtitle Concealing
         if (captions.isNotEmpty()) {
             val captionOverlay: TextureOverlay = SubtitleBitmapOverlay(captions)
             videoEffects.add(OverlayEffect(ImmutableList.of(captionOverlay)))
@@ -252,8 +252,8 @@ class Media3TransformerEngine(private val context: Context) {
     }
 
     /**
-     * Dynamic BitmapOverlay that renders synchronized subtitles while intelligently masking
-     * and concealing original hardcoded subtitles present in the source video.
+     * Dynamic BitmapOverlay that renders synchronized subtitles while seamlessly concealing
+     * original hardcoded subtitles located in the lower-third zone.
      */
     private class SubtitleBitmapOverlay(
         private val captions: List<Caption>,
@@ -288,10 +288,15 @@ class Media3TransformerEngine(private val context: Context) {
             val activeCaption = captions.firstOrNull { currentSec >= it.start && currentSec <= it.end }
             if (activeCaption != null && activeCaption.text.isNotBlank()) {
                 val posX = if (activeCaption.x > 1.0f) activeCaption.x / 100f else activeCaption.x
-                val posY = if (activeCaption.y > 1.0f) activeCaption.y / 100f else activeCaption.y
+
+                // Lower-third subtitle anchoring:
+                // Native subtitles on vertical video sit between 0.88 and 0.93.
+                // Anchoring lower-third captions directly to 0.90f ensures the concealer mask blankets the original text precisely.
+                val rawY = if (activeCaption.y > 1.0f) activeCaption.y / 100f else activeCaption.y
+                val targetY = if (rawY in 0.75f..0.96f) 0.90f else rawY
 
                 val x = targetWidth * posX.coerceIn(0.05f, 0.95f)
-                val y = targetHeight * posY.coerceIn(0.1f, 0.95f)
+                val y = targetHeight * targetY.coerceIn(0.1f, 0.95f)
 
                 val scaledFontSize = if (activeCaption.fontSizeSp > 0f) {
                     activeCaption.fontSizeSp * (targetWidth / 460f)
@@ -314,12 +319,12 @@ class Media3TransformerEngine(private val context: Context) {
                 }
 
                 // 1. INTELLIGENT ORIGINAL SUBTITLE MASKING
-                // Measures text width and enforces a generous minimum width (at least 75% of screen width)
-                // so the solid opaque pill completely covers longer original sentences underneath.
+                // Measures text width and enforces a solid opaque concealer footprint spanning 80% of width
+                // so original white/yellow captions underneath are completely blanketed and hidden.
                 val textWidth = textPaint.measureText(activeCaption.text)
                 val padH = 32f
                 val padV = 18f
-                val minConcealerWidth = targetWidth * 0.78f // Covers full lower-third subtitle area
+                val minConcealerWidth = targetWidth * 0.80f
                 val maskWidth = maxOf(textWidth + (padH * 2), minConcealerWidth)
 
                 val pillRect = RectF(
